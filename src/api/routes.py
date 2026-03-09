@@ -479,15 +479,16 @@ async def analyze_video(request: PlaylistAnalyzeRequest):
 
         # 이미 다운로드 여부 확인 (채널 루트 폴더)
         download_path = Config.get_download_path(channel_name)
-        already = duplicate_filter.filter_already_downloaded(
+        remaining = duplicate_filter.filter_already_downloaded(
             [{'id': video_id, 'title': info['title']}], str(download_path)
         )
-        already_downloaded = 0 if already else 1
-        to_download = 1 if already else 0
+        # remaining: 아직 다운로드 안 된 영상 목록 (0개면 이미 받음, 1개면 미다운로드)
+        to_download = len(remaining)
+        already_downloaded = 1 - to_download
 
         video_infos = [
             VideoInfo(id=video_id, title=info['title'])
-        ] if already else []
+        ] if remaining else []
 
         return ChannelAnalyzeResponse(
             success=True,

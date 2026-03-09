@@ -46,6 +46,7 @@ def is_valid_youtube_url(url: str) -> bool:
 
     youtube_patterns = [
         r'(https?://)?(www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'(https?://)?(www\.)?youtube\.com/shorts/[\w-]+',
         r'(https?://)?(www\.)?youtube\.com/channel/[\w-]+',
         r'(https?://)?(www\.)?youtube\.com/@.+',
         r'(https?://)?(www\.)?youtube\.com/c/.+',
@@ -73,6 +74,7 @@ def extract_video_id(url: str) -> Optional[str]:
     """
     patterns = [
         r'watch\?v=([\w-]+)',
+        r'/shorts/([\w-]+)',
         r'youtu\.be/([\w-]+)',
         r'embed/([\w-]+)',
     ]

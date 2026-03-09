@@ -125,6 +125,12 @@ async function init() {
     elements.quality.addEventListener('change', () => {
         elements.analyzeBtn.focus();
     });
+    elements.quality.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            elements.analyzeBtn.click();
+        }
+    });
     elements.downloadAllBtn.addEventListener('click', downloadAll);
     elements.stopDownloadBtn.addEventListener('click', () => {
         if (isDownloading) {
@@ -185,6 +191,10 @@ async function checkHealth() {
  * Detect URL type and call appropriate analyze endpoint
  */
 function detectUrlType(url) {
+    // Shorts URL → 개별 동영상으로 처리
+    if (url.includes('/shorts/')) {
+        return 'video';
+    }
     if (url.includes('playlist?list=') || url.includes('&list=')) {
         return 'playlist';
     }
