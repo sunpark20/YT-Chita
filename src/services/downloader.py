@@ -6,6 +6,7 @@ Wrapper around yt-dlp for extracting download information
 
 import logging
 import os
+import sys
 import yt_dlp
 from typing import Dict, List, Optional
 
@@ -14,16 +15,35 @@ from utils.config import Config
 logger = logging.getLogger(__name__)
 
 
+def _get_ffmpeg_location() -> str:
+    """Get ffmpeg path — bundled binary in PyInstaller, or system default."""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller .app 번들: Contents/MacOS/ → Contents/Frameworks/
+        bundle_dir = os.path.dirname(sys.executable)
+        for candidate in [
+            bundle_dir,                                          # MacOS/
+            os.path.join(bundle_dir, '..', 'Frameworks'),        # Frameworks/
+            os.path.join(bundle_dir, '..', 'Resources'),         # Resources/
+        ]:
+            ffmpeg_path = os.path.join(candidate, 'ffmpeg')
+            if os.path.isfile(ffmpeg_path):
+                return os.path.abspath(candidate)
+    return ''  # 시스템 PATH 사용
+
+
 class YouTubeDownloader:
     """yt-dlp wrapper for YouTube downloads"""
 
     def __init__(self):
+        ffmpeg_loc = _get_ffmpeg_location()
         self.ydl_opts_base = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
             'extractor_args': {'youtube': {'lang': ['ko']}},
         }
+        if ffmpeg_loc:
+            self.ydl_opts_base['ffmpeg_location'] = ffmpeg_loc
 
     def get_video_info(self, video_id: str) -> Optional[Dict]:
         """
