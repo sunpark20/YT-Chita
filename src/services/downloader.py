@@ -199,6 +199,7 @@ class YouTubeDownloader:
                         videos.append({
                             'id': entry['id'],
                             'title': entry.get('title', 'Unknown'),
+                            'availability': entry.get('availability'),
                         })
 
                 metadata = {
@@ -332,6 +333,15 @@ class YouTubeDownloader:
                     return None
 
         except Exception as e:
+            error_msg = str(e).lower()
+            membership_keywords = [
+                'join this channel', 'members-only', 'members only',
+                'membership', '멤버십', 'this video is available to this channel',
+                '회원 전용', '채널에 가입',
+            ]
+            if any(kw in error_msg for kw in membership_keywords):
+                logger.info(f"Membership-only video skipped: {video_id}")
+                return "MEMBERSHIP_SKIP"
             logger.error(f"Error downloading {video_id}: {e}")
             return None
 

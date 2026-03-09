@@ -35,6 +35,7 @@ const LOADING_MESSAGES = [
 let currentVideos = [];
 let currentChannelName = '';
 let currentPlaylistName = '';
+let currentUrlType = '';
 let isAnalyzing = false;
 let isDownloading = false;
 let stopRequested = false;
@@ -144,10 +145,8 @@ async function init() {
         if (e.target === elements.helpModal) elements.helpModal.style.display = 'none';
     });
     document.getElementById('openDownloadFolderBtn').addEventListener('click', () => {
-        const savePath = currentChannelName
-            ? `~/Downloads/YouTubeDownloader/${currentChannelName}/${currentPlaylistName || ''}`
-            : '~/Downloads/YouTubeDownloader/';
-        openDownloadFolder(savePath);
+        const { folderPath } = buildSavePaths();
+        openDownloadFolder(folderPath);
     });
     elements.completeCloseBtn.addEventListener('click', () => elements.completeModal.style.display = 'none');
     elements.completeModal.addEventListener('click', (e) => {
@@ -191,6 +190,10 @@ function detectUrlType(url) {
     }
     if (url.endsWith('/playlists')) {
         return 'channel_playlists';
+    }
+    // 개별 동영상 URL (watch?v=, youtu.be/, 11자리 ID)
+    if (url.includes('watch?v=') || url.includes('youtu.be/') || /^[\w-]{11}$/.test(url)) {
+        return 'video';
     }
     return 'channel';
 }
@@ -237,7 +240,9 @@ async function analyzeUrl() {
     }, 2000);
 
     let endpoint = '/channel/analyze';
-    if (urlType === 'playlist') {
+    if (urlType === 'video') {
+        endpoint = '/video/analyze';
+    } else if (urlType === 'playlist') {
         endpoint = '/playlist/analyze';
     } else if (urlType === 'channel_playlists') {
         endpoint = '/channel/playlists/analyze';
@@ -268,6 +273,7 @@ async function analyzeUrl() {
         }
 
         if (data.success) {
+            currentUrlType = urlType;
             displayResults(data);
         } else {
             throw new Error(data.message || '분석 실패');
@@ -428,14 +434,12 @@ async function downloadAll() {
     if (skipped > 0) parts.push(`스킵: ${skipped}`);
     if (failed > 0) parts.push(`실패: ${failed}`);
     if (stopped) parts.push(`중지됨: ${currentVideos.length - completed - skipped - failed}`);
-    const savePath = currentChannelName
-        ? `~/Downloads/YouTubeDownloader/${currentChannelName}/${currentPlaylistName || ''}`
-        : '~/Downloads/YouTubeDownloader/';
+    const { displayPath, folderPath } = buildSavePaths();
 
     elements.completeTitle.textContent = stopped ? '다운로드 중지됨' : '다운로드 완료';
     elements.completeSummary.textContent = parts.join(' · ');
-    elements.completePath.textContent = savePath;
-    elements.openFolderBtn.onclick = () => openDownloadFolder(savePath);
+    elements.completePath.textContent = displayPath;
+    elements.openFolderBtn.onclick = () => openDownloadFolder(folderPath);
     elements.completeModal.style.display = 'flex';
 
     isDownloading = false;
@@ -573,6 +577,39 @@ async function deleteApiKey() {
     } finally {
         elements.deleteApiKeyBtn.disabled = false;
     }
+}
+
+/**
+ * Build save path display string and folder path for opening
+ * Returns { displayPath, folderPath }
+ */
+function buildSavePaths() {
+    const base = '~/Downloads/YouTubeDownloader/';
+    if (!currentChannelName) {
+        return { displayPath: base, folderPath: base };
+    }
+
+    if (currentUrlType === 'channel_playlists') {
+        // 채널/playlists: 각 재생목록별 폴더에 저장됨
+        return {
+            displayPath: `${base}${currentChannelName}/ (각 재생목록별 폴더)`,
+            folderPath: `${base}${currentChannelName}/`,
+        };
+    }
+
+    if (currentPlaylistName) {
+        // 단일 재생목록
+        return {
+            displayPath: `${base}${currentChannelName}/${currentPlaylistName}/`,
+            folderPath: `${base}${currentChannelName}/${currentPlaylistName}/`,
+        };
+    }
+
+    // 개별 동영상 또는 @채널 → All Videos
+    return {
+        displayPath: `${base}${currentChannelName}/All Videos/`,
+        folderPath: `${base}${currentChannelName}/All Videos/`,
+    };
 }
 
 /**

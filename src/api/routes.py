@@ -5,6 +5,7 @@ FastAPI route handlers for all endpoints
 """
 
 import logging
+from collections import Counter
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 import asyncio
@@ -198,6 +199,15 @@ async def analyze_channel(request: ChannelAnalyzeRequest):
                 message="No videos found in channel"
             )
 
+        # 멤버십 전용 영상 필터링 (availability 필드 + 제목 키워드)
+        membership_avail = {'subscriber_only', 'needs_auth', 'premium_only'}
+        membership_title_kw = ['멤버십', '멤버쉽', '회원 전용', 'membership', 'members only']
+        videos = [
+            v for v in videos
+            if (v.get('availability') or '') not in membership_avail
+            and not any(kw in (v.get('title') or '').lower() for kw in membership_title_kw)
+        ]
+
         # Filter Shorts (≤180s) when using API and include_shorts is False
         if not request.include_shorts and not use_fallback:
             videos = [v for v in videos if (v.get('duration') or 999) > 180]
@@ -277,6 +287,26 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
                 logger.info(f"Analyzing channel playlists via API: {channel_id} ({channel_name})")
                 # Fetch all playlists
                 playlists = youtube_service.get_channel_playlists(channel_id)
+
+                # 멤버십 전용 재생목록 필터링
+                membership_keywords = ['멤버십', '멤버쉽', 'membership', 'members only', 'members-only']
+                playlists = [
+                    pl for pl in playlists
+                    if not any(kw in pl['title'].lower() for kw in membership_keywords)
+                ]
+
+                # 같은 이름 재생목록 → 상위 폴더/하위 번호 폴더 구조
+                name_counts = Counter(pl['title'] for pl in playlists)
+                name_indices = {}
+                for pl in playlists:
+                    name = pl['title']
+                    if name_counts[name] > 1:
+                        idx = name_indices.get(name, 0) + 1
+                        name_indices[name] = idx
+                        pl['folder_name'] = f"{name}/{name} ({idx})"
+                    else:
+                        pl['folder_name'] = name
+
                 for pl in playlists:
                     pl_videos = youtube_service.get_playlist_videos(pl['id'], request.max_videos)
                     for v in pl_videos:
@@ -284,7 +314,7 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
                             'id': v['id'],
                             'title': v['title'],
                             'publishedAt': v.get('publishedAt'),
-                            'playlist_name': pl['title']
+                            'playlist_name': pl['folder_name']
                         })
             else:
                 use_fallback = True
@@ -309,18 +339,45 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
                     channel_name = info.get('channel', '') or info.get('uploader', '')
                     channel_id = info.get('channel_id', 'unknown_channel')
                     
-                    entries = info.get('entries', [])
+                    entries = list(info.get('entries', []))
+
+                    # 멤버십 전용 재생목록 필터링
+                    membership_keywords = ['멤버십', '멤버쉽', 'membership', 'members only', 'members-only']
+                    entries = [
+                        e for e in entries
+                        if e and not any(kw in (e.get('title') or '').lower() for kw in membership_keywords)
+                    ]
+
+                    # 같은 이름 재생목록 → 상위 폴더/하위 번호 폴더 구조
+                    pl_titles = [e.get('title', 'Unknown Playlist') for e in entries if e]
+                    fb_name_counts = Counter(pl_titles)
+                    fb_name_indices = {}
+
                     for pl_entry in entries:
+                        if not pl_entry:
+                            continue
                         pl_title = pl_entry.get('title', 'Unknown Playlist')
+                        if fb_name_counts[pl_title] > 1:
+                            idx = fb_name_indices.get(pl_title, 0) + 1
+                            fb_name_indices[pl_title] = idx
+                            folder_name = f"{pl_title}/{pl_title} ({idx})"
+                        else:
+                            folder_name = pl_title
+
                         pl_url = pl_entry.get('url')
                         if pl_url:
                             pl_info = ydl.extract_info(pl_url, download=False)
                             for v_entry in pl_info.get('entries', []):
                                 if v_entry and v_entry.get('id'):
+                                    # 개별 영상 멤버십 필터 (yt-dlp availability 필드)
+                                    avail = (v_entry.get('availability') or '').lower()
+                                    if avail in ('subscriber_only', 'needs_auth', 'premium_only'):
+                                        logger.info(f"Skipping membership video: {v_entry.get('title')} ({avail})")
+                                        continue
                                     videos_list.append({
                                         'id': v_entry['id'],
                                         'title': v_entry.get('title', 'Unknown'),
-                                        'playlist_name': pl_title
+                                        'playlist_name': folder_name
                                     })
             except Exception as e:
                 logger.error(f"yt-dlp fallback failed for playlists: {e}")
@@ -398,6 +455,55 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
         raise
     except Exception as e:
         logger.error(f"Error analyzing channel playlists: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/video/analyze", response_model=ChannelAnalyzeResponse)
+async def analyze_video(request: PlaylistAnalyzeRequest):
+    """Analyze a single YouTube video URL — returns 1 video, saved to channel root folder"""
+    request.url = normalize_input(request.url)
+    if not is_valid_youtube_url(request.url):
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+
+    try:
+        video_id = extract_video_id(request.url)
+        if not video_id:
+            raise HTTPException(status_code=400, detail="동영상 ID를 추출할 수 없습니다.")
+
+        # yt-dlp로 영상 정보 가져오기
+        info = await asyncio.to_thread(downloader.get_video_info, video_id)
+        if not info:
+            raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다.")
+
+        channel_name = info.get('uploader', '') or 'Unknown Channel'
+
+        # 이미 다운로드 여부 확인 (채널 루트 폴더)
+        download_path = Config.get_download_path(channel_name)
+        already = duplicate_filter.filter_already_downloaded(
+            [{'id': video_id, 'title': info['title']}], str(download_path)
+        )
+        already_downloaded = 0 if already else 1
+        to_download = 1 if already else 0
+
+        video_infos = [
+            VideoInfo(id=video_id, title=info['title'])
+        ] if already else []
+
+        return ChannelAnalyzeResponse(
+            success=True,
+            channel_name=channel_name,
+            total_videos=1,
+            unique_videos=1,
+            already_downloaded=already_downloaded,
+            to_download=to_download,
+            videos=video_infos,
+            message=f"단일 영상 분석 완료"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error analyzing video: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -510,7 +616,11 @@ async def start_download(request: DownloadExtractRequest):
             downloader.download_video, request.video_id, request.quality, output_dir
         )
 
-        if filepath:
+        if filepath == "MEMBERSHIP_SKIP":
+            # 멤버십 전용 영상 → 아카이브에 기록하여 다음에 스킵
+            archive.add_video(request.video_id)
+            return {"success": True, "skipped": True, "message": "멤버십 전용 (스킵)"}
+        elif filepath:
             # 다운로드 성공 → 아카이브에 기록
             archive.add_video(request.video_id)
             return {"success": True, "skipped": False, "message": "다운로드 완료", "filepath": filepath}
