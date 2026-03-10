@@ -139,7 +139,24 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          generate_release_notes: true  # 변경 사항 로그 자동 생성
+          generate_release_notes: true
+          body: |
+            ## v1.1.9 업데이트
+
+            ### 디자인 변경
+            - 영상 목록에 체크박스 아이콘 추가
+            - 받기 버튼 선택 개수 표시 (`받기 (N개)`)
+            - 전체선택 / 개별선택 체크박스 UI
+
+            ### 키보드 컨트롤 추가
+            - URL 입력 → `Enter` → 형식 선택 → `Enter` → 분석 → `Enter`로 다운로드까지 키보드만으로 완료 가능
+            - 영상 목록에서 `↑↓ 방향키`로 항목 이동, `Space`로 선택/해제, `Enter`로 바로 다운로드
+            - `Cmd+↑↓` (Mac) / `Ctrl+↑↓` (Windows)로 목록 맨 위/아래 이동
+            - 전체선택 체크박스로 일괄 선택/해제
+
+            ### 선택 다운로드
+            - 원하는 영상만 골라서 다운로드 가능 (기존: 전체 다운로드만 가능)
+            - 선택 없으면 받기 버튼 비활성화
           files: |
             YouTubeDownloader-macOS-x86_64/YouTubeDownloader-macOS-x86_64.dmg
             YouTubeDownloader-macOS-arm64/YouTubeDownloader-macOS-arm64.dmg

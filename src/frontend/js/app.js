@@ -40,6 +40,7 @@ let isAnalyzing = false;
 let isDownloading = false;
 let stopRequested = false;
 let currentDownloadController = null;
+let selectedVideos = new Set();
 
 // DOM Elements
 const elements = {
@@ -74,6 +75,9 @@ const elements = {
     deleteApiKeyBtn: document.getElementById('deleteApiKeyBtn'),
     apiKeyMessage: document.getElementById('apiKeyMessage'),
     apiKeyStatus: document.getElementById('apiKeyStatus'),
+
+    // Select All
+    selectAllCheckbox: document.getElementById('selectAllCheckbox'),
 
     // Help
     helpBtn: document.getElementById('helpBtn'),
@@ -146,6 +150,49 @@ async function init() {
     elements.quality.addEventListener('blur', () => {
         elements.quality.size = 0;
         elements.quality.classList.remove('expanded');
+    });
+    elements.selectAllCheckbox.addEventListener('change', () => {
+        const checked = elements.selectAllCheckbox.checked;
+        document.querySelectorAll('.video-checkbox').forEach(cb => {
+            cb.checked = checked;
+        });
+        if (checked) {
+            currentVideos.forEach((_, i) => selectedVideos.add(i));
+        } else {
+            selectedVideos.clear();
+        }
+        updateSelectionCount();
+        if (selectedVideos.size > 0) elements.downloadAllBtn.focus();
+    });
+    // Video list keyboard navigation: Arrow keys + Space + Enter
+    elements.videoList.addEventListener('keydown', (e) => {
+        const items = [...elements.videoList.querySelectorAll('.video-item')];
+        const focused = document.activeElement.closest('.video-item');
+        const idx = focused ? items.indexOf(focused) : -1;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const target = (e.metaKey || e.ctrlKey) ? items[items.length - 1] : items[Math.min(idx + 1, items.length - 1)];
+            if (target) { target.focus(); target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const target = (e.metaKey || e.ctrlKey) ? items[0] : items[Math.max(idx - 1, 0)];
+            if (target) { target.focus(); target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        } else if (e.key === ' ') {
+            e.preventDefault();
+            if (focused) {
+                const cb = focused.querySelector('.video-checkbox');
+                if (cb) {
+                    cb.checked = !cb.checked;
+                    cb.dispatchEvent(new Event('change'));
+                }
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedVideos.size > 0 && !isDownloading) {
+                elements.downloadAllBtn.click();
+            }
+        }
     });
     elements.downloadAllBtn.addEventListener('click', downloadAll);
     elements.stopDownloadBtn.addEventListener('click', async () => {
@@ -381,6 +428,7 @@ function displayResults(data) {
  */
 function renderVideoList(videos) {
     elements.videoList.innerHTML = '';
+    selectedVideos.clear();
 
     if (videos.length === 0) {
         elements.videoList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">다운로드할 영상이 없습니다.</div>';
@@ -390,10 +438,13 @@ function renderVideoList(videos) {
     const digitClass = videos.length >= 100 ? 'digits-3' : videos.length >= 10 ? 'digits-2' : '';
 
     videos.forEach((video, index) => {
+        selectedVideos.add(index);
         const videoItem = document.createElement('div');
         videoItem.className = 'video-item';
+        videoItem.tabIndex = 0;
         videoItem.id = `video-row-${index}`;
         videoItem.innerHTML = `
+            <input type="checkbox" class="video-checkbox" data-index="${index}" checked>
             <div class="video-number ${digitClass}">${index + 1}</div>
             <div class="video-info">
                 <div class="video-title">${escapeHtml(video.title)}</div>
@@ -402,14 +453,64 @@ function renderVideoList(videos) {
         `;
         elements.videoList.appendChild(videoItem);
     });
+
+    // Bind individual checkbox events
+    document.querySelectorAll('.video-checkbox').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            if (e.target.checked) {
+                selectedVideos.add(idx);
+            } else {
+                selectedVideos.delete(idx);
+            }
+            syncSelectAll();
+            updateSelectionCount();
+            const row = e.target.closest('.video-item');
+            if (row) row.focus();
+        });
+    });
+
+    // Sync select-all checkbox
+    elements.selectAllCheckbox.checked = true;
+    elements.selectAllCheckbox.indeterminate = false;
+    updateSelectionCount();
+}
+
+/**
+ * Sync select-all checkbox state with individual checkboxes
+ */
+function syncSelectAll() {
+    const total = currentVideos.length;
+    const selected = selectedVideos.size;
+    if (selected === 0) {
+        elements.selectAllCheckbox.checked = false;
+        elements.selectAllCheckbox.indeterminate = false;
+    } else if (selected === total) {
+        elements.selectAllCheckbox.checked = true;
+        elements.selectAllCheckbox.indeterminate = false;
+    } else {
+        elements.selectAllCheckbox.checked = false;
+        elements.selectAllCheckbox.indeterminate = true;
+    }
+}
+
+/**
+ * Update selection count on button and videoCount span
+ */
+function updateSelectionCount() {
+    const count = selectedVideos.size;
+    elements.videoCount.textContent = count;
+    const btnText = elements.downloadAllBtn.querySelector('.btn-text');
+    btnText.textContent = `받기 (${count}개)`;
+    elements.downloadAllBtn.disabled = count === 0;
 }
 
 /**
  * Download all videos
  */
 async function downloadAll() {
-    if (currentVideos.length === 0) {
-        alert('다운로드할 영상이 없습니다.');
+    if (selectedVideos.size === 0) {
+        alert('다운로드할 영상을 선택해주세요.');
         return;
     }
 
@@ -420,12 +521,19 @@ async function downloadAll() {
     elements.downloadAllBtn.disabled = true;
     elements.analyzeBtn.disabled = true;
 
+    // Build ordered list of selected indices
+    const downloadIndices = [];
+    for (let i = 0; i < currentVideos.length; i++) {
+        if (selectedVideos.has(i)) downloadIndices.push(i);
+    }
+    const totalSelected = downloadIndices.length;
+
     // Show mini progress bar + stop button (right next to download button)
     elements.progressWrap.style.display = 'flex';
     elements.stopDownloadBtn.disabled = false;
     elements.stopDownloadBtn.style.opacity = '1';
     elements.progressFill.style.width = '0%';
-    elements.progressText.textContent = `0/${currentVideos.length}`;
+    elements.progressText.textContent = `0/${totalSelected}`;
 
     // Focus stop button so Enter key can stop download
     setTimeout(() => elements.stopDownloadBtn.focus(), 100);
@@ -435,23 +543,26 @@ async function downloadAll() {
     let skipped = 0;
     let failed = 0;
     let stopped = false;
+    let doneCount = 0;
 
-    for (let i = 0; i < currentVideos.length; i++) {
+    for (let di = 0; di < downloadIndices.length; di++) {
+        const i = downloadIndices[di];
+
         // Check stop request before starting next video
         if (stopRequested) {
             stopped = true;
-            // Mark remaining videos as stopped
-            for (let j = i; j < currentVideos.length; j++) {
-                updateVideoRow(j, 'stopped', '중지됨');
+            // Mark remaining selected videos as stopped
+            for (let dj = di; dj < downloadIndices.length; dj++) {
+                updateVideoRow(downloadIndices[dj], 'stopped', '중지됨');
             }
             break;
         }
 
         const video = currentVideos[i];
 
-        // Update mini progress (i = 완료된 수, 다운로드 시작 전)
-        elements.progressFill.style.width = `${Math.round((i / currentVideos.length) * 100)}%`;
-        elements.progressText.textContent = `${i}/${currentVideos.length}`;
+        // Update mini progress (doneCount = 완료된 수, 다운로드 시작 전)
+        elements.progressFill.style.width = `${Math.round((doneCount / totalSelected) * 100)}%`;
+        elements.progressText.textContent = `${doneCount}/${totalSelected}`;
 
         // Mark current row as downloading
         updateVideoRow(i, 'downloading', '다운로드 중');
@@ -491,8 +602,8 @@ async function downloadAll() {
                 clearInterval(pollId);
                 updateVideoRow(i, 'stopped', '중단됨');
                 stopped = true;
-                for (let j = i + 1; j < currentVideos.length; j++) {
-                    updateVideoRow(j, 'stopped', '중지됨');
+                for (let dj = di + 1; dj < downloadIndices.length; dj++) {
+                    updateVideoRow(downloadIndices[dj], 'stopped', '중지됨');
                 }
                 break;
             } else if (response.ok && data.success) {
@@ -506,8 +617,9 @@ async function downloadAll() {
                     updateVideoRow(i, 'success', prog.total ? `완료 \u00b7 ${prog.total}` : '완료');
                 }
                 // 완료 후 프로그레스바 업데이트
-                elements.progressFill.style.width = `${Math.round(((i + 1) / currentVideos.length) * 100)}%`;
-                elements.progressText.textContent = `${i + 1}/${currentVideos.length}`;
+                doneCount++;
+                elements.progressFill.style.width = `${Math.round((doneCount / totalSelected) * 100)}%`;
+                elements.progressText.textContent = `${doneCount}/${totalSelected}`;
             } else {
                 throw new Error(data.detail || '다운로드 실패');
             }
@@ -518,8 +630,8 @@ async function downloadAll() {
             if (error.name === 'AbortError' || stopRequested) {
                 updateVideoRow(i, 'stopped', '중단됨');
                 stopped = true;
-                for (let j = i + 1; j < currentVideos.length; j++) {
-                    updateVideoRow(j, 'stopped', '중지됨');
+                for (let dj = di + 1; dj < downloadIndices.length; dj++) {
+                    updateVideoRow(downloadIndices[dj], 'stopped', '중지됨');
                 }
                 break;
             }
@@ -527,8 +639,9 @@ async function downloadAll() {
             failed++;
             updateVideoRow(i, 'error', '실패');
             // 실패해도 프로그레스바 업데이트
-            elements.progressFill.style.width = `${Math.round(((i + 1) / currentVideos.length) * 100)}%`;
-            elements.progressText.textContent = `${i + 1}/${currentVideos.length}`;
+            doneCount++;
+            elements.progressFill.style.width = `${Math.round((doneCount / totalSelected) * 100)}%`;
+            elements.progressText.textContent = `${doneCount}/${totalSelected}`;
         }
     }
 
@@ -537,7 +650,7 @@ async function downloadAll() {
     if (completed > 0) parts.push(`성공: ${completed}`);
     if (skipped > 0) parts.push(`스킵: ${skipped}`);
     if (failed > 0) parts.push(`실패: ${failed}`);
-    if (stopped) parts.push(`중지됨: ${currentVideos.length - completed - skipped - failed}`);
+    if (stopped) parts.push(`중지됨: ${totalSelected - completed - skipped - failed}`);
     const { displayPath, folderPath } = buildSavePaths();
 
     elements.completeTitle.textContent = stopped ? '다운로드 중지됨' : '다운로드 완료';
@@ -565,6 +678,7 @@ function updateVideoRow(index, type, statusText) {
 
     const numberEl = row.querySelector('.video-number');
     const statusEl = document.getElementById(`video-status-${index}`);
+    if (!numberEl || !statusEl) return;
 
     // Update row state
     row.setAttribute('data-state', type);

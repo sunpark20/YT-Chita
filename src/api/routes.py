@@ -672,7 +672,7 @@ async def open_folder(request: dict):
         if system == "Darwin":
             subprocess.Popen(["open", folder_path])
         elif system == "Windows":
-            subprocess.Popen(["explorer", folder_path])
+            os.startfile(folder_path)
         else:
             subprocess.Popen(["xdg-open", folder_path])
         return {"success": True}
