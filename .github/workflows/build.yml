@@ -8,7 +8,15 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            arch: x86_64
+          - os: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    name: Build macOS (${{ matrix.arch }})
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,6 +50,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
+          # .spec 파일에서 아키텍처를 강제 지정 (환경에 맞게)
           pyinstaller YouTubeDownloader.spec --clean --noconfirm
 
       - name: Code Sign and Notarize
@@ -51,31 +60,24 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           APP_PATH="dist/YouTubeDownloader.app"
-          
-          # 1. Sign
           codesign --force --options runtime --deep --sign "Developer ID Application" --entitlements entitlements.plist --timestamp "$APP_PATH"
-          
-          # 2. Zip for Notarization
           ditto -c -k --keepParent "$APP_PATH" dist/YouTubeDownloader.zip
-          
-          # 3. Submit for Notarization
           xcrun notarytool submit dist/YouTubeDownloader.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD" --wait
-          
-          # 4. Staple
           xcrun stapler staple "$APP_PATH"
 
       - name: Create DMG
         run: |
-          hdiutil create -volname "YouTubeDownloader" -srcfolder dist/YouTubeDownloader.app -ov -format UDZO dist/YouTubeDownloader.dmg
+          hdiutil create -volname "YouTubeDownloader" -srcfolder dist/YouTubeDownloader.app -ov -format UDZO dist/YouTubeDownloader-${{ matrix.arch }}.dmg
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: YouTubeDownloader-macOS
-          path: dist/YouTubeDownloader.dmg
+          name: YouTubeDownloader-macOS-${{ matrix.arch }}
+          path: dist/YouTubeDownloader-${{ matrix.arch }}.dmg
 
   build-windows:
     runs-on: windows-latest
+    name: Build Windows (x64)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -92,20 +94,18 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller YouTubeDownloader.spec --clean --noconfirm
+
       - name: Download FFmpeg for Windows
         run: |
           curl -L https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -o ffmpeg.zip
           Expand-Archive ffmpeg.zip -DestinationPath .
-          Move-Item ffmpeg-master-latest-win64-gpl/bin/ffmpeg.exe dist/YouTubeDownloader/ffmpeg.exe -Force
-          Move-Item ffmpeg-master-latest-win64-gpl/bin/ffprobe.exe dist/YouTubeDownloader/ffprobe.exe -Force
-        continue-on-error: true # 디렉토리가 아직 없을 수 있음
-
-      - name: Build with PyInstaller
-        run: |
-          pyinstaller YouTubeDownloader.spec --clean --noconfirm
-          # 빌드 후 다시 한번 ffmpeg 복사 (확실히 하기 위해)
+          # 빌드 결과 폴더에 ffmpeg 복사
           if (!(Test-Path "dist/YouTubeDownloader")) { New-Item -ItemType Directory -Force -Path "dist/YouTubeDownloader" }
-          # ... (생략 가능하지만 안정성을 위해 빌드 후 처리 권장)
+          Copy-Item ffmpeg-master-latest-win64-gpl/bin/ffmpeg.exe dist/YouTubeDownloader/ffmpeg.exe -Force
+          Copy-Item ffmpeg-master-latest-win64-gpl/bin/ffprobe.exe dist/YouTubeDownloader/ffprobe.exe -Force
 
       - name: Zip Windows Release
         run: |
@@ -129,7 +129,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            YouTubeDownloader-macOS/YouTubeDownloader.dmg
+            YouTubeDownloader-macOS-arm64/YouTubeDownloader-arm64.dmg
+            YouTubeDownloader-macOS-x86_64/YouTubeDownloader-x86_64.dmg
             YouTubeDownloader-Windows/YouTubeDownloader-Windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
