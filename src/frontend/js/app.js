@@ -495,7 +495,8 @@ function updateVideoRow(index, type, statusText) {
 
     // Update row state
     row.setAttribute('data-state', type);
-    numberEl.className = `video-number video-number-${type}`;
+    const digitClass = numberEl.className.match(/digits-\d/) ? numberEl.className.match(/digits-\d/)[0] : '';
+    numberEl.className = `video-number ${digitClass} video-number-${type}`.replace(/\s+/g, ' ').trim();
     statusEl.className = `video-status video-status-${type}`;
     statusEl.textContent = statusText;
 
