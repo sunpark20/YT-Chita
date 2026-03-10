@@ -29,7 +29,7 @@ class Config:
 
     # Application
     APP_NAME = "YouTube BULK DOWNLOADER"
-    APP_VERSION = "1.1.5"
+    APP_VERSION = "1.1.6"
 
     # Server
     HOST = "127.0.0.1"

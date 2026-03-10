@@ -17,18 +17,29 @@ logger = logging.getLogger(__name__)
 
 def _get_ffmpeg_location() -> str:
     """Get ffmpeg path — bundled binary in PyInstaller, or system default."""
+    is_windows = sys.platform.startswith('win')
+    ffmpeg_bin = 'ffmpeg.exe' if is_windows else 'ffmpeg'
+
     if getattr(sys, 'frozen', False):
-        # PyInstaller .app 번들: Contents/MacOS/ → Contents/Frameworks/
+        # PyInstaller 빌드 환경
         bundle_dir = os.path.dirname(sys.executable)
-        for candidate in [
-            bundle_dir,                                          # MacOS/
-            os.path.join(bundle_dir, '..', 'Frameworks'),        # Frameworks/
-            os.path.join(bundle_dir, '..', 'Resources'),         # Resources/
-        ]:
-            ffmpeg_path = os.path.join(candidate, 'ffmpeg')
+        
+        # 탐색할 후보 경로들
+        candidates = [bundle_dir]
+        if not is_windows:
+            # macOS 전용 구조 추가
+            candidates.extend([
+                os.path.join(bundle_dir, '..', 'Frameworks'),
+                os.path.join(bundle_dir, '..', 'Resources'),
+            ])
+
+        for candidate in candidates:
+            ffmpeg_path = os.path.join(candidate, ffmpeg_bin)
             if os.path.isfile(ffmpeg_path):
+                # yt-dlp는 파일 경로가 아니라 디렉토리 경로를 원할 때가 많음
                 return os.path.abspath(candidate)
-    return ''  # 시스템 PATH 사용
+    
+    return ''  # 시스템 PATH에서 찾음 (이미 PATH에 있는 경우)
 
 
 class YouTubeDownloader:
