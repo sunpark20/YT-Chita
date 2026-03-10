@@ -8,15 +8,8 @@ on:
 
 jobs:
   build-macos:
-    strategy:
-      matrix:
-        include:
-          - os: macos-12      # Intel (x86_64) - macos-13 대신 12로 시도
-            arch: x86_64
-          - os: macos-latest  # Silicon (arm64)
-            arch: arm64
-    runs-on: ${{ matrix.os }}
-    name: Build macOS (${{ matrix.arch }})
+    runs-on: macos-latest  # 최신 실리콘 맥 서버에서 실행
+    name: Build macOS (Universal2)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,20 +35,13 @@ jobs:
           CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
           CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
-          import base64
-          import os
-          import subprocess
-
-          # Base64 디코딩 및 파일 저장
+          import base64, os, subprocess
           cert_data = os.environ['CERTIFICATE_P12_BASE64']
           if not cert_data:
               print("ERROR: MACOS_CERTIFICATE is empty!")
               exit(1)
-          
           with open('certificate.p12', 'wb') as f:
               f.write(base64.b64decode(cert_data))
-          
-          # 키체인 설정 및 인증서 임포트
           cert_pwd = os.environ['CERTIFICATE_PASSWORD']
           commands = [
               'security create-keychain -p "" build.keychain',
@@ -67,9 +53,10 @@ jobs:
           for cmd in commands:
               subprocess.run(cmd, shell=True, check=True)
 
-      - name: Build with PyInstaller
+      - name: Build with PyInstaller (Universal2)
         run: |
-          pyinstaller --clean --noconfirm YouTubeDownloader.spec
+          # --target-arch universal2 옵션을 사용하여 인텔/실리콘 통합 빌드
+          pyinstaller --clean --noconfirm --target-arch universal2 YouTubeDownloader.spec
 
       - name: Code Sign and Notarize
         env:
@@ -85,14 +72,13 @@ jobs:
 
       - name: Create DMG
         run: |
-          # 파일명을 명확히 지정하여 생성
-          hdiutil create -volname "YouTubeDownloader" -srcfolder dist/YouTubeDownloader.app -ov -format UDZO dist/YouTubeDownloader-${{ matrix.arch }}.dmg
+          hdiutil create -volname "YouTubeDownloader" -srcfolder dist/YouTubeDownloader.app -ov -format UDZO dist/YouTubeDownloader-macOS.dmg
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: YouTubeDownloader-macOS-${{ matrix.arch }}
-          path: dist/YouTubeDownloader-${{ matrix.arch }}.dmg
+          name: YouTubeDownloader-macOS
+          path: dist/YouTubeDownloader-macOS.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -146,9 +132,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          generate_release_notes: true  # 변경 사항 로그 자동 생성
           files: |
-            YouTubeDownloader-macOS-arm64/YouTubeDownloader-arm64.dmg
-            YouTubeDownloader-macOS-x86_64/YouTubeDownloader-x86_64.dmg
+            YouTubeDownloader-macOS/YouTubeDownloader-macOS.dmg
             YouTubeDownloader-Windows/YouTubeDownloader-Windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
