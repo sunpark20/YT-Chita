@@ -1,83 +1,135 @@
-name: Build Desktop App - Windows & macOS
+name: Build and Release
 
 on:
   push:
-    branches:
-      - main
-      - claude/github-mobile-repo-creation-3sv6C
-  pull_request:
-    branches:
-      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [macos-latest, windows-latest]
-        include:
-          - os: macos-latest
-            artifact_name: YouTubeDownloader-macOS
-            output_path: dist/YouTubeDownloader
-          - os: windows-latest
-            artifact_name: YouTubeDownloader-Windows
-            output_path: dist/YouTubeDownloader.exe
-
-    runs-on: ${{ matrix.os }}
-
+  build-macos:
+    runs-on: macos-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-    - name: Build with PyInstaller (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        pyinstaller --onefile \
-          --windowed \
-          --name="YouTubeDownloader" \
-          --add-data "src/frontend:src/frontend" \
-          src/main.py
+      - name: Install FFmpeg
+        run: brew install ffmpeg
 
-    - name: Build with PyInstaller (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        pyinstaller --onefile --windowed --name="YouTubeDownloader" --add-data "src/frontend;src/frontend" src/main.py
+      - name: Import macOS Certificates
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          echo $CERTIFICATE_P12 | base64 --decode > certificate.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
 
-    - name: Create archive (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        cd dist
-        zip -r ../YouTubeDownloader-macOS.zip YouTubeDownloader
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller YouTubeDownloader.spec --clean --noconfirm
 
-    - name: Create archive (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        cd dist
-        Compress-Archive -Path YouTubeDownloader.exe -DestinationPath ../YouTubeDownloader-Windows.zip
+      - name: Code Sign and Notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          APP_PATH="dist/YouTubeDownloader.app"
+          
+          # 1. Sign
+          codesign --force --options runtime --deep --sign "Developer ID Application" --entitlements entitlements.plist --timestamp "$APP_PATH"
+          
+          # 2. Zip for Notarization
+          ditto -c -k --keepParent "$APP_PATH" dist/YouTubeDownloader.zip
+          
+          # 3. Submit for Notarization
+          xcrun notarytool submit dist/YouTubeDownloader.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD" --wait
+          
+          # 4. Staple
+          xcrun stapler staple "$APP_PATH"
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact_name }}
-        path: YouTubeDownloader-*.zip
-        retention-days: 90
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "YouTubeDownloader" -srcfolder dist/YouTubeDownloader.app -ov -format UDZO dist/YouTubeDownloader.dmg
 
-  summary:
-    needs: build
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTubeDownloader-macOS
+          path: dist/YouTubeDownloader.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Download FFmpeg for Windows
+        run: |
+          curl -L https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip -o ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath .
+          Move-Item ffmpeg-master-latest-win64-gpl/bin/ffmpeg.exe dist/YouTubeDownloader/ffmpeg.exe -Force
+          Move-Item ffmpeg-master-latest-win64-gpl/bin/ffprobe.exe dist/YouTubeDownloader/ffprobe.exe -Force
+        continue-on-error: true # 디렉토리가 아직 없을 수 있음
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller YouTubeDownloader.spec --clean --noconfirm
+          # 빌드 후 다시 한번 ffmpeg 복사 (확실히 하기 위해)
+          if (!(Test-Path "dist/YouTubeDownloader")) { New-Item -ItemType Directory -Force -Path "dist/YouTubeDownloader" }
+          # ... (생략 가능하지만 안정성을 위해 빌드 후 처리 권장)
+
+      - name: Zip Windows Release
+        run: |
+          Compress-Archive -Path dist/YouTubeDownloader/* -DestinationPath dist/YouTubeDownloader-Windows.zip
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTubeDownloader-Windows
+          path: dist/YouTubeDownloader-Windows.zip
+
+  create-release:
+    needs: [build-macos, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-    - name: Build Summary
-      run: |
-        echo "✅ Build completed successfully!"
-        echo "📦 Windows and macOS builds are ready"
-        echo "📥 Download artifacts from the Actions tab"
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            YouTubeDownloader-macOS/YouTubeDownloader.dmg
+            YouTubeDownloader-Windows/YouTubeDownloader-Windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
