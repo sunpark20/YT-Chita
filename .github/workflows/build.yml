@@ -145,7 +145,7 @@ jobs:
         with:
           generate_release_notes: true
           body: |
-            ## v1.2.3 업데이트
+            ## v1.2.4 업데이트
 
             ### 디자인 변경
             - 영상 목록에 체크박스 아이콘 추가
