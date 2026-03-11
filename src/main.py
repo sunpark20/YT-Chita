@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import logging
+import traceback
 import urllib.request
 import webview
 
@@ -17,6 +18,16 @@ from services.updater import update_ytdlp_on_startup
 
 # Setup logging
 logger = setup_logger("Main", logging.INFO)
+
+
+def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
+    """Log any uncaught exception before the process dies."""
+    logger.critical(
+        "Uncaught exception:\n" + "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    )
+
+
+sys.excepthook = _handle_uncaught_exception
 
 
 def start_fastapi_server():
