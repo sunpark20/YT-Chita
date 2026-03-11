@@ -5,6 +5,7 @@ Desktop application using pywebview + FastAPI
 """
 
 import sys
+from pathlib import Path
 import threading
 import time
 import logging
@@ -14,6 +15,7 @@ import webview
 
 from utils.logger import setup_logger
 from utils.config import Config
+from utils.crash_reporter import send_crash_report
 from services.updater import update_ytdlp_on_startup
 
 # Setup logging
@@ -25,6 +27,7 @@ def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
     logger.critical(
         "Uncaught exception:\n" + "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
     )
+    send_crash_report(exc_type, exc_value, exc_tb)
 
 
 sys.excepthook = _handle_uncaught_exception
@@ -159,6 +162,12 @@ def main():
 
     if not server_ready:
         logger.warning("Server did not respond to health check within 10s, proceeding anyway")
+        # Report startup failure so we know the server never came up
+        send_crash_report(
+            RuntimeError,
+            RuntimeError("Server failed to start within 10 seconds"),
+            None,
+        )
 
     # Step 3: Create pywebview window
     logger.info("Creating desktop window...")
@@ -210,4 +219,5 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         logger.error(f"Fatal error: {e}")
+        send_crash_report(*sys.exc_info())
         sys.exit(1)

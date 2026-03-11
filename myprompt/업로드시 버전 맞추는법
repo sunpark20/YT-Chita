@@ -1,3 +1,0 @@
- 1. YouTubeDownloader.spec: macOS 앱 번들(.app)의 메타데이터 (버전 1.0.0)
-   2. src/utils/config.py: 앱 실행 시 내부적으로 사용하는 버전 변수 (버전 1.0.0)
-   3. README.md 나 기타 문서 (있을 수 있음)
