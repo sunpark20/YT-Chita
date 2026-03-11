@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import logging
+import traceback
 import urllib.request
 import webview
 
@@ -17,6 +18,68 @@ from services.updater import update_ytdlp_on_startup
 
 # Setup logging
 logger = setup_logger("Main", logging.INFO)
+
+
+def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
+    """Log any uncaught exception before the process dies."""
+    logger.critical(
+        "Uncaught exception:\n" + "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    )
+
+
+sys.excepthook = _handle_uncaught_exception
+
+
+def _check_environment():
+    """
+    Validate runtime environment and log diagnostics.
+    Catches the two most common Intel Mac launch failures:
+      1. PyObjC version mismatch (webview backend cannot initialise)
+      2. ffmpeg binary missing from the bundle / PATH
+    """
+    import platform
+    import shutil
+
+    logger.info(f"Python {sys.version}")
+    logger.info(f"Platform: {platform.platform()}")
+    logger.info(f"Architecture: {platform.machine()}")
+
+    # --- 1. PyObjC check (macOS only) ---
+    if sys.platform == "darwin":
+        try:
+            import objc
+            logger.info(f"PyObjC version: {objc.__version__}")
+        except ImportError as e:
+            logger.critical(f"PyObjC import failed — webview cannot start on macOS: {e}")
+            logger.critical("Fix: rebuild with 'pip install pyobjc-core pyobjc-framework-Cocoa pyobjc-framework-WebKit'")
+
+        try:
+            import WebKit  # noqa: F401
+            logger.info("WebKit framework: OK")
+        except ImportError as e:
+            logger.critical(f"WebKit import failed: {e}")
+
+    # --- 2. ffmpeg check ---
+    if getattr(sys, "frozen", False):
+        # Packaged app: ffmpeg should be next to the executable
+        exe_dir = Path(sys.executable).parent
+        ffmpeg_bin = exe_dir / "ffmpeg"
+        if ffmpeg_bin.exists():
+            logger.info(f"ffmpeg (bundled): {ffmpeg_bin}")
+        else:
+            logger.warning(f"ffmpeg NOT found in bundle at {ffmpeg_bin}")
+            # Fall back to PATH
+            fallback = shutil.which("ffmpeg")
+            if fallback:
+                logger.info(f"ffmpeg (PATH fallback): {fallback}")
+            else:
+                logger.error("ffmpeg not found — downloads requiring merge will fail")
+    else:
+        ffmpeg_path = shutil.which("ffmpeg")
+        if ffmpeg_path:
+            logger.info(f"ffmpeg: {ffmpeg_path}")
+        else:
+            logger.warning("ffmpeg not found in PATH (development mode)")
 
 
 def start_fastapi_server():
@@ -61,6 +124,9 @@ def main():
     logger.info("=" * 70)
     logger.info(f"{Config.APP_NAME} v{Config.APP_VERSION}")
     logger.info("=" * 70)
+
+    # Step 0: Validate environment (PyObjC, ffmpeg, arch)
+    _check_environment()
 
     # Step 1: Update yt-dlp on startup
     logger.info("Checking yt-dlp updates...")

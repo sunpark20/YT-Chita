@@ -10,19 +10,34 @@ is_macos = sys.platform == 'darwin'
 # 바이너리(ffmpeg) 설정
 if is_macos:
     import shutil
-    if os.path.exists('/opt/homebrew/bin/ffmpeg'):       # ARM
+    if os.path.exists('/opt/homebrew/bin/ffmpeg'):       # ARM (Apple Silicon)
         ffmpeg_path = '/opt/homebrew/bin/ffmpeg'
         ffprobe_path = '/opt/homebrew/bin/ffprobe'
-    elif os.path.exists('/usr/local/bin/ffmpeg'):        # Intel
+    elif os.path.exists('/usr/local/bin/ffmpeg'):        # Intel (Homebrew x86_64)
         ffmpeg_path = '/usr/local/bin/ffmpeg'
         ffprobe_path = '/usr/local/bin/ffprobe'
     else:
-        ffmpeg_path = shutil.which('ffmpeg') or 'ffmpeg'
-        ffprobe_path = shutil.which('ffprobe') or 'ffprobe'
+        ffmpeg_path = shutil.which('ffmpeg')
+        ffprobe_path = shutil.which('ffprobe')
+
+    # ffmpeg 누락 시 빌드 실패 (인텔맥 무음 실패 방지)
+    if not ffmpeg_path or not os.path.exists(ffmpeg_path):
+        raise SystemExit(
+            "\n[ERROR] ffmpeg를 찾을 수 없습니다.\n"
+            "  ARM:   brew install ffmpeg  (Apple Silicon)\n"
+            "  Intel: arch -x86_64 brew install ffmpeg\n"
+        )
+    if not ffprobe_path or not os.path.exists(ffprobe_path):
+        raise SystemExit(
+            "\n[ERROR] ffprobe를 찾을 수 없습니다.\n"
+            "  ARM:   brew install ffmpeg  (Apple Silicon)\n"
+            "  Intel: arch -x86_64 brew install ffmpeg\n"
+        )
 
     icon_file = 'resource/icon.icns'
     target_arch = 'arm64' if platform.machine() == 'arm64' else 'x86_64'
     binaries = [(ffmpeg_path, '.'), (ffprobe_path, '.')]
+    print(f"[Spec] ffmpeg: {ffmpeg_path} (arch={target_arch})")
 else:
     # Windows/Linux용 설정
     ffmpeg_path = 'ffmpeg.exe' if is_windows else 'ffmpeg'
@@ -94,12 +109,12 @@ if is_macos:
         name='YouTubeDownloader.app',
         icon=icon_file,
         bundle_identifier='com.sunpark.YouTubeDownloader',
-        version='1.1.9',
+        version='1.2.1',
         info_plist={
             'CFBundleDisplayName': 'YouTube BULK DOWNLOADER',
             'CFBundleName': 'YouTubeDownloader',
-            'CFBundleShortVersionString': '1.1.9',
-            'CFBundleVersion': '1.1.9',
+            'CFBundleShortVersionString': '1.2.1',
+            'CFBundleVersion': '1.2.1',
             'NSHighResolutionCapable': True,
             'LSMinimumSystemVersion': '10.15',
             'NSAppTransportSecurity': {
