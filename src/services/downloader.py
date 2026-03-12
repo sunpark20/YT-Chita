@@ -60,6 +60,7 @@ class YouTubeDownloader:
             self.ydl_opts_base['ffmpeg_location'] = ffmpeg_loc
         self._progress = {}  # 현재 진행률 데이터
         self._last_total = ''  # 다운로드 완료 시 파일크기 보관 (MP3 변환 후 사용)
+        self._downloaded_bytes = 0  # 스트림별 크기 누적 (bestvideo+bestaudio 대응)
         self._cancel_event = threading.Event()
 
     def request_cancel(self):
@@ -69,6 +70,16 @@ class YouTubeDownloader:
     def reset_cancel(self):
         """취소 플래그 초기화"""
         self._cancel_event.clear()
+
+    @staticmethod
+    def _format_bytes(b: int) -> str:
+        """Format bytes to human readable string (MiB/GiB)"""
+        if b < 1024 ** 2:
+            return f"{b / 1024:.2f}KiB"
+        elif b < 1024 ** 3:
+            return f"{b / 1024 ** 2:.2f}MiB"
+        else:
+            return f"{b / 1024 ** 3:.2f}GiB"
 
     @staticmethod
     def _strip_ansi(s: str) -> str:
@@ -88,7 +99,8 @@ class YouTubeDownloader:
                 'eta': self._strip_ansi(d.get('_eta_str', '')).strip(),
             }
         elif d['status'] == 'finished':
-            total = self._strip_ansi(d.get('_total_bytes_str', '')).strip()
+            self._downloaded_bytes += d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+            total = self._format_bytes(self._downloaded_bytes)
             self._last_total = total
             self._progress = {
                 'status': 'finished',
@@ -207,11 +219,10 @@ class YouTubeDownloader:
 
         # Format selection based on quality
         if quality == 'best':
-            format_string = 'best[vcodec^=avc1][ext=mp4]/best[ext=mp4]/best'
+            format_string = 'best[ext=mp4]/best'
         elif quality == 'audio':
             format_string = 'bestaudio[ext=m4a]/bestaudio'
         else:
-            # Try to get specific quality
             height = quality.replace('p', '')
             format_string = (
                 f'bestvideo[height<={height}][vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/'
@@ -367,6 +378,7 @@ class YouTubeDownloader:
         """
         url = f"https://www.youtube.com/watch?v={video_id}"
         self.reset_cancel()
+        self._downloaded_bytes = 0
 
         if not output_dir:
             output_dir = str(Config.DOWNLOADS_DIR)
@@ -402,7 +414,7 @@ class YouTubeDownloader:
                     f'best[height<={height}]/best'
                 )
             else:
-                format_string = 'bestvideo[vcodec^=avc1]+bestaudio/bestvideo+bestaudio/best'
+                format_string = 'bestvideo+bestaudio/best'
 
             ydl_opts = {
                 **self.ydl_opts_base,
