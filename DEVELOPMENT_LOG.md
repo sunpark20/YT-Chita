@@ -86,7 +86,7 @@
 
 **Features**:
 - yt-dlp wrapper with clean interface
-- Multiple quality options (360p, 720p, 1080p, audio-only)
+- Multiple quality options (360p, 720p, 1080p, best, audio-only)
 - Direct download URL extraction
 - Format information retrieval
 
@@ -96,9 +96,8 @@
 - `get_download_info(video_id)`: Complete download package
 
 **Quality Options**:
-- Video: 360p, 720p, 1080p
+- Video: 360p, 720p, 1080p (H.264 우선), best (코덱 무관 최고 해상도)
 - Audio: Best available (m4a/mp3)
-- Fallback: Best available format
 
 **Testing**: Ready for integration testing
 
