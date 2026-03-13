@@ -10,6 +10,7 @@ import os
 import re
 import sys
 import threading
+import time
 import yt_dlp
 from typing import Dict, List, Optional
 
@@ -55,12 +56,23 @@ class YouTubeDownloader:
             'no_warnings': True,
             'extract_flat': False,
             'extractor_args': {'youtube': {'lang': ['ko']}},
+            # retry: 실패 시 재시도
+            'retries': 3,
+            'fragment_retries': 3,
+            'extractor_retries': 3,
+            # sleep: 연속 요청 시 YouTube 차단 방지
+            'sleep_interval': 1,
+            'max_sleep_interval': 3,
+            'sleep_interval_requests': 1,
+            # 프래그먼트 병렬 다운로드 (단일 영상 내 DASH 조각을 동시에 받음)
+            'concurrent_fragment_downloads': 4,
+            'logger': logger,   # yt-dlp 에러/경고를 Python logger로 캡처
         }
         if ffmpeg_loc:
             self.ydl_opts_base['ffmpeg_location'] = ffmpeg_loc
-        self._progress = {}  # 현재 진행률 데이터
-        self._last_total = ''  # 다운로드 완료 시 파일크기 보관 (병합 후 실제 크기 표시용)
-        self._downloaded_bytes = 0  # 스트림별 크기 누적 (bestvideo+bestaudio 대응)
+        self._progress_map = {}           # {video_id: {status, percent, ...}}
+        self._last_total_map = {}         # {video_id: str}
+        self._downloaded_bytes_map = {}   # {video_id: int}
         self._cancel_event = threading.Event()
 
     def request_cancel(self):
@@ -86,49 +98,11 @@ class YouTubeDownloader:
         """Remove ANSI escape sequences from string"""
         return re.sub(r'\x1b\[[0-9;]*m', '', s)
 
-    def _progress_hook(self, d):
-        """yt-dlp progress callback"""
-        if self._cancel_event.is_set():
-            raise yt_dlp.utils.DownloadError("사용자가 다운로드를 중단했습니다.")
-        if d['status'] == 'downloading':
-            self._progress = {
-                'status': 'downloading',
-                'percent': self._strip_ansi(d.get('_percent_str', '')).strip(),
-                'total': self._strip_ansi(d.get('_total_bytes_str') or d.get('_total_bytes_estimate_str', '')).strip(),
-                'speed': self._strip_ansi(d.get('_speed_str', '')).strip(),
-                'eta': self._strip_ansi(d.get('_eta_str', '')).strip(),
-            }
-        elif d['status'] == 'finished':
-            self._downloaded_bytes += d.get('total_bytes') or d.get('total_bytes_estimate') or 0
-            total = self._format_bytes(self._downloaded_bytes)
-            self._last_total = total
-            self._progress = {
-                'status': 'finished',
-                'total': total,
-            }
-
-    def _postprocessor_hook(self, d):
-        """yt-dlp postprocessor callback (FFmpeg 변환 등)"""
-        status = d.get('status', '')
-        if status == 'started':
-            self._progress = {
-                'status': 'converting',
-                'percent': '',
-                'total': '',
-                'speed': '',
-                'eta': '',
-                'postprocessor': d.get('postprocessor', ''),
-            }
-        elif status == 'finished':
-            filepath = d.get('info_dict', {}).get('filepath', '')
-            if filepath and os.path.exists(filepath):
-                total = self._format_bytes(os.path.getsize(filepath))
-            else:
-                total = self._last_total
-            self._progress = {
-                'status': 'converting_done',
-                'total': total,
-            }
+    def get_progress(self, video_id=None):
+        """video_id별 진행률 조회. video_id=None이면 전체 반환."""
+        if video_id:
+            return self._progress_map.get(video_id, {})
+        return dict(self._progress_map)
 
     def get_video_info(self, video_id: str) -> Optional[Dict]:
         """
@@ -382,27 +356,72 @@ class YouTubeDownloader:
             Downloaded file path or None
         """
         url = f"https://www.youtube.com/watch?v={video_id}"
-        self.reset_cancel()
-        self._downloaded_bytes = 0
+        self._downloaded_bytes_map[video_id] = 0
+        self._last_total_map[video_id] = ''
+
+        # video_id를 캡처한 클로저 훅
+        def progress_hook(d):
+            if self._cancel_event.is_set():
+                raise yt_dlp.utils.DownloadError("사용자가 다운로드를 중단했습니다.")
+            if d['status'] == 'downloading':
+                self._progress_map[video_id] = {
+                    'status': 'downloading',
+                    'percent': self._strip_ansi(d.get('_percent_str', '')).strip(),
+                    'total': self._strip_ansi(d.get('_total_bytes_str') or d.get('_total_bytes_estimate_str', '')).strip(),
+                    'speed': self._strip_ansi(d.get('_speed_str', '')).strip(),
+                    'eta': self._strip_ansi(d.get('_eta_str', '')).strip(),
+                }
+            elif d['status'] == 'finished':
+                self._downloaded_bytes_map[video_id] += d.get('total_bytes') or d.get('total_bytes_estimate') or 0
+                total = self._format_bytes(self._downloaded_bytes_map[video_id])
+                self._last_total_map[video_id] = total
+                self._progress_map[video_id] = {
+                    'status': 'finished',
+                    'total': total,
+                }
+
+        def postprocessor_hook(d):
+            status = d.get('status', '')
+            if status == 'started':
+                self._progress_map[video_id] = {
+                    'status': 'converting',
+                    'percent': '',
+                    'total': '',
+                    'speed': '',
+                    'eta': '',
+                    'postprocessor': d.get('postprocessor', ''),
+                }
+            elif status == 'finished':
+                filepath = d.get('info_dict', {}).get('filepath', '')
+                if filepath and os.path.exists(filepath):
+                    total = self._format_bytes(os.path.getsize(filepath))
+                else:
+                    total = self._last_total_map.get(video_id, '')
+                self._progress_map[video_id] = {
+                    'status': 'converting_done',
+                    'total': total,
+                }
 
         if not output_dir:
             output_dir = str(Config.DOWNLOADS_DIR)
 
         os.makedirs(output_dir, exist_ok=True)
 
-        # 이전 강제 종료로 남은 임시 파일 정리
-        self._cleanup_partial_files(output_dir, video_id)
-
         # 파일명: YYMMDD_영상제목.확장자 (영상 업로드 날짜)
         outtmpl = os.path.join(output_dir, '%(upload_date>%y%m%d)s_%(title)s.%(ext)s')
 
         if quality == 'audio':
-            format_string = 'bestaudio[ext=m4a]'
+            format_string = 'bestaudio[ext=m4a]/bestaudio'
             ydl_opts = {
                 **self.ydl_opts_base,
                 'format': format_string,
                 'outtmpl': outtmpl,
-                'progress_hooks': [self._progress_hook],
+                'progress_hooks': [progress_hook],
+                'postprocessor_hooks': [postprocessor_hook],
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'm4a',
+                }],
             }
         else:
             height = quality.replace('p', '') if quality != 'best' else ''
@@ -419,47 +438,74 @@ class YouTubeDownloader:
                 **self.ydl_opts_base,
                 'format': format_string,
                 'outtmpl': outtmpl,
-                'progress_hooks': [self._progress_hook],
+                'progress_hooks': [progress_hook],
                 'merge_output_format': 'mp4',
             }
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                if not info:
-                    return None
+        max_attempts = 2
+        for attempt in range(max_attempts):
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    if not info:
+                        return None
 
-                filepath = ydl.prepare_filename(info)
-                else:
-                    # 병합 시 확장자가 바뀔 수 있으므로 mp4로 변경
+                    filepath = ydl.prepare_filename(info)
                     base, _ = os.path.splitext(filepath)
-                    filepath = base + '.mp4'
+                    if quality == 'audio':
+                        filepath = base + '.m4a'
+                    else:
+                        # 병합 시 확장자가 바뀔 수 있으므로 mp4로 변경
+                        filepath = base + '.mp4'
 
-                if os.path.exists(filepath):
-                    logger.info(f"Downloaded: {filepath}")
-                    return filepath
-                else:
-                    logger.warning(f"File not found after download: {filepath}")
-                    return None
+                    if os.path.exists(filepath):
+                        logger.info(f"Downloaded: {filepath}")
+                        return filepath
+                    else:
+                        logger.warning(f"File not found after download: {filepath}")
+                        return None
 
-        except Exception as e:
-            # 취소 요청에 의한 중단
-            if self._cancel_event.is_set():
-                logger.info(f"Download cancelled by user: {video_id}")
-                self._cleanup_partial_files(output_dir, video_id)
-                return "CANCELLED"
+            except Exception as e:
+                # 취소 요청에 의한 중단
+                if self._cancel_event.is_set():
+                    logger.info(f"Download cancelled by user: {video_id}")
+                    self._cleanup_partial_files(output_dir, video_id)
+                    return "CANCELLED"
 
-            error_msg = str(e).lower()
-            membership_keywords = [
-                'join this channel', 'members-only', 'members only',
-                'membership', '멤버십', 'this video is available to this channel',
-                '회원 전용', '채널에 가입',
-            ]
-            if any(kw in error_msg for kw in membership_keywords):
-                logger.info(f"Membership-only video skipped: {video_id}")
-                return "MEMBERSHIP_SKIP"
-            logger.error(f"Error downloading {video_id}: {e}")
-            return None
+                error_msg = str(e)
+
+                # 포맷 에러이고 아직 재시도 가능하면 관대한 포맷으로 폴백 재시도
+                if 'Requested format is not available' in error_msg and attempt < max_attempts - 1:
+                    logger.warning(f"Format unavailable for {video_id}, retrying with permissive format in 3s... (attempt {attempt + 1}/{max_attempts})")
+                    self._downloaded_bytes_map[video_id] = 0
+                    # 재시도 시 height/codec 제한 없는 관대한 포맷으로 폴백
+                    if quality == 'audio':
+                        ydl_opts['format'] = 'bestaudio'
+                    else:
+                        ydl_opts['format'] = 'bestvideo+bestaudio/best'
+                    time.sleep(3)
+                    continue
+
+                error_msg_lower = error_msg.lower()
+                membership_keywords = [
+                    'join this channel', 'members-only', 'members only',
+                    'membership', '멤버십', 'this video is available to this channel',
+                    '회원 전용', '채널에 가입',
+                ]
+                if any(kw in error_msg_lower for kw in membership_keywords):
+                    logger.info(f"Membership-only video skipped: {video_id}")
+                    return "MEMBERSHIP_SKIP"
+
+                age_keywords = [
+                    '로그인하세요', 'sign in', 'age', 'verify your age',
+                    '성인', '부적절', 'confirm your age',
+                ]
+                if any(kw in error_msg_lower for kw in age_keywords):
+                    logger.info(f"Age-restricted video skipped: {video_id}")
+                    return "AGE_RESTRICTED_SKIP"
+
+                logger.error(f"Error downloading {video_id}: {e}")
+                return None
 
     @staticmethod
     def _cleanup_partial_files(output_dir: str, video_id: str):

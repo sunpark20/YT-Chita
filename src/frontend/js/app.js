@@ -39,7 +39,7 @@ let currentUrlType = '';
 let isAnalyzing = false;
 let isDownloading = false;
 let stopRequested = false;
-let currentDownloadController = null;
+let currentDownloadControllers = [];  // 2개 동시 abort 지원
 let selectedVideos = new Set();
 
 // DOM Elements
@@ -204,10 +204,9 @@ async function init() {
             try {
                 await fetch(`${API_BASE}/download/cancel`, { method: 'POST' });
             } catch (_) {}
-            // 진행 중인 fetch 요청도 abort
-            if (currentDownloadController) {
-                currentDownloadController.abort();
-            }
+            // 진행 중인 fetch 요청 모두 abort
+            currentDownloadControllers.forEach(c => c.abort());
+            currentDownloadControllers = [];
         }
     });
     elements.settingsBtn.addEventListener('click', toggleSettings);
@@ -517,13 +516,26 @@ async function downloadAll() {
     isDownloading = true;
     stopRequested = false;
     elements.downloadAllBtn.disabled = true;
+    elements.downloadAllBtn.classList.remove('pop-in');
     elements.analyzeBtn.disabled = true;
+
+    // 체크박스 비활성화
+    document.querySelectorAll('.video-checkbox').forEach(cb => cb.disabled = true);
+    elements.selectAllCheckbox.disabled = true;
 
     // Build ordered list of selected indices
     const downloadIndices = [];
     for (let i = 0; i < currentVideos.length; i++) {
         if (selectedVideos.has(i)) downloadIndices.push(i);
     }
+
+    // 이전 '중단됨' 상태 초기화
+    downloadIndices.forEach(i => {
+        const row = document.getElementById(`video-row-${i}`);
+        if (row && row.getAttribute('data-state') === 'stopped') {
+            updateVideoRow(i, 'pending', '');
+        }
+    });
     const totalSelected = downloadIndices.length;
 
     // Show mini progress bar + stop button (right next to download button)
@@ -543,108 +555,107 @@ async function downloadAll() {
     let stopped = false;
     let doneCount = 0;
 
-    for (let di = 0; di < downloadIndices.length; di++) {
-        const i = downloadIndices[di];
+    // 배치 시작 전 취소 플래그 초기화
+    try {
+        await fetch(`${API_BASE}/download/reset-cancel`, { method: 'POST' });
+    } catch (_) {}
 
-        // Check stop request before starting next video
-        if (stopRequested) {
-            stopped = true;
-            // Mark remaining selected videos as stopped
-            for (let dj = di; dj < downloadIndices.length; dj++) {
-                updateVideoRow(downloadIndices[dj], 'stopped', '중지됨');
-            }
-            break;
-        }
+    // 2-워커 풀: 큐에서 하나씩 꺼내서 병렬 처리
+    const queue = [...downloadIndices];
+    let queueIndex = 0;
 
-        const video = currentVideos[i];
-
-        // Update mini progress (doneCount = 완료된 수, 다운로드 시작 전)
+    function updateProgress() {
         elements.progressFill.style.width = `${Math.round((doneCount / totalSelected) * 100)}%`;
         elements.progressText.textContent = `${doneCount}/${totalSelected}`;
+    }
 
-        // Mark current row as downloading
-        updateVideoRow(i, 'downloading', '다운로드 중');
+    async function worker() {
+        while (queueIndex < queue.length && !stopRequested) {
+            const i = queue[queueIndex++];
+            const video = currentVideos[i];
 
-        // Start polling for individual download progress
-        let dotCount = 0;
-        const pollId = setInterval(async () => {
+            updateProgress();
+            updateVideoRow(i, 'downloading', '다운로드 중');
+
+            // video_id별 진행률 폴링
+            let dotCount = 0;
+            const pollId = setInterval(async () => {
+                try {
+                    const prog = await fetch(`${API_BASE}/download/progress/${video.id}`).then(r => r.json());
+                    if (prog.status === 'downloading') {
+                        const parts = [prog.percent, prog.total, prog.speed, prog.eta ? `ETA ${prog.eta}` : ''].filter(Boolean);
+                        updateVideoRow(i, 'downloading', parts.join(' \u00b7 '));
+                    } else if (prog.status === 'converting') {
+                        dotCount = (dotCount % 3) + 1;
+                        updateVideoRow(i, 'downloading', '오디오 변환 중' + '.'.repeat(dotCount));
+                    }
+                } catch (_) {}
+            }, 1000);
+
             try {
-                const prog = await fetch(`${API_BASE}/download/progress`).then(r => r.json());
-                if (prog.status === 'downloading') {
-                    const parts = [prog.percent, prog.total, prog.speed, prog.eta ? `ETA ${prog.eta}` : ''].filter(Boolean);
-                    updateVideoRow(i, 'downloading', parts.join(' \u00b7 '));
-                } else if (prog.status === 'converting') {
-                    dotCount = (dotCount % 3) + 1;
-                    updateVideoRow(i, 'downloading', '오디오 변환 중' + '.'.repeat(dotCount));
-                }
-            } catch (_) {}
-        }, 1000);
+                const controller = new AbortController();
+                currentDownloadControllers.push(controller);
+                const response = await fetchWithTimeout(`${API_BASE}/download/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        video_id: video.id,
+                        quality: quality,
+                        channel_name: currentChannelName || null,
+                        playlist_name: video.playlist_name || currentPlaylistName || null,
+                    }),
+                    signal: controller.signal,
+                }, 600000);
 
-        try {
-            currentDownloadController = new AbortController();
-            const response = await fetchWithTimeout(`${API_BASE}/download/start`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    video_id: video.id,
-                    quality: quality,
-                    channel_name: currentChannelName || null,
-                    playlist_name: video.playlist_name || currentPlaylistName || null,
-                }),
-                signal: currentDownloadController.signal,
-            }, 600000);  // 10분 타임아웃
-
-            clearInterval(pollId);
-            const data = await response.json();
-
-            if (data.cancelled) {
-                // 서버에서 취소 확인
                 clearInterval(pollId);
-                updateVideoRow(i, 'stopped', '중단됨');
-                stopped = true;
-                for (let dj = di + 1; dj < downloadIndices.length; dj++) {
-                    updateVideoRow(downloadIndices[dj], 'stopped', '중지됨');
-                }
-                break;
-            } else if (response.ok && data.success) {
-                if (data.skipped) {
-                    skipped++;
-                    updateVideoRow(i, 'skip', '스킵');
-                } else {
-                    completed++;
-                    // 완료 시 파일 크기 표시
-                    const prog = await fetch(`${API_BASE}/download/progress`).then(r => r.json()).catch(() => ({}));
-                    updateVideoRow(i, 'success', prog.total ? `완료 \u00b7 ${prog.total}` : '완료');
-                }
-                // 완료 후 프로그레스바 업데이트
-                doneCount++;
-                elements.progressFill.style.width = `${Math.round((doneCount / totalSelected) * 100)}%`;
-                elements.progressText.textContent = `${doneCount}/${totalSelected}`;
-            } else {
-                throw new Error(data.detail || '다운로드 실패');
-            }
+                // controller 제거
+                currentDownloadControllers = currentDownloadControllers.filter(c => c !== controller);
+                const data = await response.json();
 
-        } catch (error) {
-            clearInterval(pollId);
-            // AbortError 또는 stopRequested → 즉시 중단 처리
-            if (error.name === 'AbortError' || stopRequested) {
-                updateVideoRow(i, 'stopped', '중단됨');
-                stopped = true;
-                for (let dj = di + 1; dj < downloadIndices.length; dj++) {
-                    updateVideoRow(downloadIndices[dj], 'stopped', '중지됨');
+                if (data.cancelled) {
+                    updateVideoRow(i, 'stopped', '중단됨');
+                    stopped = true;
+                    break;
+                } else if (response.ok && data.success) {
+                    if (data.skipped) {
+                        skipped++;
+                        updateVideoRow(i, 'skip', data.reason ? `스킵 · ${data.reason}` : '스킵');
+                    } else {
+                        completed++;
+                        const prog = await fetch(`${API_BASE}/download/progress/${video.id}`).then(r => r.json()).catch(() => ({}));
+                        updateVideoRow(i, 'success', prog.total ? `완료 \u00b7 ${prog.total}` : '완료');
+                    }
+                    doneCount++;
+                    updateProgress();
+                } else {
+                    throw new Error(data.detail || '다운로드 실패');
                 }
-                break;
+
+            } catch (error) {
+                clearInterval(pollId);
+                if (error.name === 'AbortError' || stopRequested) {
+                    updateVideoRow(i, 'stopped', '중단됨');
+                    stopped = true;
+                    break;
+                }
+                console.error(`Error downloading ${video.title}:`, error);
+                failed++;
+                updateVideoRow(i, 'error', '실패');
+                doneCount++;
+                updateProgress();
             }
-            console.error(`Error downloading ${video.title}:`, error);
-            failed++;
-            updateVideoRow(i, 'error', '실패');
-            // 실패해도 프로그레스바 업데이트
-            doneCount++;
-            elements.progressFill.style.width = `${Math.round((doneCount / totalSelected) * 100)}%`;
-            elements.progressText.textContent = `${doneCount}/${totalSelected}`;
         }
+    }
+
+    // 2개 워커 동시 실행
+    await Promise.all([worker(), worker()]);
+
+    // 중지 시 남은 큐 항목 '중지됨' 표시
+    if (stopped || stopRequested) {
+        for (let qi = queueIndex; qi < queue.length; qi++) {
+            updateVideoRow(queue[qi], 'stopped', '중지됨');
+        }
+        stopped = true;
     }
 
     // Summary via modal
@@ -665,10 +676,14 @@ async function downloadAll() {
 
     isDownloading = false;
     stopRequested = false;
-    currentDownloadController = null;
+    currentDownloadControllers = [];
     elements.downloadAllBtn.disabled = false;
     elements.analyzeBtn.disabled = false;
     elements.progressWrap.style.display = 'none';
+
+    // 체크박스 다시 활성화
+    document.querySelectorAll('.video-checkbox').forEach(cb => cb.disabled = false);
+    elements.selectAllCheckbox.disabled = false;
 }
 
 /**
@@ -686,8 +701,10 @@ function updateVideoRow(index, type, statusText) {
     statusEl.className = `video-status video-status-${type}`;
     statusEl.textContent = statusText;
 
-    // Auto-scroll to current row
-    row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // 다운로드 시작·완료 상태에서만 스크롤 (진행률 갱신 중에는 스크롤 안 함)
+    if (type !== 'downloading' || statusText === '다운로드 중') {
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 }
 
 /**

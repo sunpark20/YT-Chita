@@ -592,10 +592,41 @@ async def analyze_playlist(request: PlaylistAnalyzeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/download/progress/{video_id}")
+async def get_download_progress_by_id(video_id: str):
+    """Get download progress for a specific video"""
+    return downloader.get_progress(video_id) or {}
+
+
 @router.get("/download/progress")
 async def get_download_progress():
-    """Get current download progress"""
-    return downloader._progress or {}
+    """Get all download progress (backwards compatible)"""
+    all_prog = downloader.get_progress()
+    if not all_prog:
+        return {}
+    # 기존 호환: 단일 dict 반환 (가장 최근 활성 항목)
+    for vid, prog in all_prog.items():
+        if prog.get('status') == 'downloading':
+            return prog
+    # downloading 없으면 아무거나 반환
+    return next(iter(all_prog.values()), {})
+
+
+@router.post("/download/reset-cancel")
+async def reset_cancel():
+    """배치 시작 전 취소 플래그 초기화 + 잔여 임시파일 정리"""
+    downloader.reset_cancel()
+    # 이전 강제 종료로 남은 임시파일 정리 (배치 시작 전 1회, 재귀)
+    import glob as _glob
+    import os as _os
+    base = str(Config.DOWNLOADS_DIR)
+    for pattern in ('**/*.part', '**/*.ytdl', '**/*.part-Frag*'):
+        for f in _glob.glob(_os.path.join(base, pattern), recursive=True):
+            try:
+                _os.remove(f)
+            except OSError:
+                pass
+    return {"success": True, "message": "취소 플래그 초기화됨"}
 
 
 @router.post("/download/cancel")
@@ -635,7 +666,11 @@ async def start_download(request: DownloadExtractRequest):
         elif filepath == "MEMBERSHIP_SKIP":
             # 멤버십 전용 영상 → 아카이브에 기록하여 다음에 스킵
             archive.add_video(request.video_id)
-            return {"success": True, "skipped": True, "message": "멤버십 전용 (스킵)"}
+            return {"success": True, "skipped": True, "message": "멤버십 전용 (스킵)", "reason": "멤버십"}
+        elif filepath == "AGE_RESTRICTED_SKIP":
+            # 성인인증 필요 영상 → 아카이브에 기록하여 다음에 스킵
+            archive.add_video(request.video_id)
+            return {"success": True, "skipped": True, "message": "성인제한 (스킵)", "reason": "성인제한"}
         elif filepath:
             # 다운로드 성공 → 아카이브에 기록
             archive.add_video(request.video_id)
