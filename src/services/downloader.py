@@ -55,7 +55,7 @@ class YTBulkDownloader:
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'extractor_args': {'youtube': {'lang': ['ko']}},
+            'extractor_args': {'youtube': {'lang': ['en']}},
             # retry: 실패 시 재시도
             'retries': 3,
             'fragment_retries': 3,
@@ -286,7 +286,7 @@ class YTBulkDownloader:
             'no_warnings': True,
             'extract_flat': 'in_playlist',
             'playlistend': max_videos,
-            'extractor_args': {'youtube': {'lang': ['ko']}},
+            'extractor_args': {'youtube': {'lang': ['en']}},
         }
 
         try:
@@ -334,7 +334,7 @@ class YTBulkDownloader:
             'no_warnings': True,
             'extract_flat': 'in_playlist',
             'playlistend': max_videos,
-            'extractor_args': {'youtube': {'lang': ['ko']}},
+            'extractor_args': {'youtube': {'lang': ['en']}},
         }
 
         try:

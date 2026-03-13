@@ -47,3 +47,20 @@ https://github.com/sunpark20/YT-Chita/releases
 ## 참고
 
 - API 키 추가하면, 오류 덜 나고 영상 분석이 빨라집니다. 100개 이상 영상 받을 때 추천
+
+
+## License
+
+이 프로젝트는 [The Unlicense](https://unlicense.org/)로 배포됩니다.
+
+### Open Source Libraries
+
+| 라이브러리 | 라이선스 |
+|-----------|---------|
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Unlicense |
+| [FFmpeg](https://ffmpeg.org/) | LGPL-2.1 / GPL |
+| [FastAPI](https://github.com/tiangolo/fastapi) | MIT |
+| [pywebview](https://github.com/nicegui-kr/pywebview) | BSD-3-Clause |
+| [uvicorn](https://github.com/encode/uvicorn) | BSD-3-Clause |
+| [Pydantic](https://github.com/pydantic/pydantic) | MIT |
+| [PyInstaller](https://github.com/pyinstaller/pyinstaller) | GPL-2.0 (빌드 도구) |
