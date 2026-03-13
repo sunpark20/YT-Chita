@@ -255,6 +255,66 @@ async function init() {
         }, 4000);
     });
 
+    // Boombox easter egg — click to play/pause music with beat detection
+    const boombox = document.getElementById('boombox');
+    let boomboxAudio = null;
+    let boomboxCtx = null;
+    let boomboxAnalyser = null;
+    let boomboxPlaying = false;
+    let boomboxAnimId = null;
+    let boomboxFreqData = null;
+
+    function boomboxBeatLoop() {
+        if (!boomboxPlaying) return;
+        boomboxAnalyser.getByteFrequencyData(boomboxFreqData);
+        // Average of low-frequency bins (0–10) for bass detection
+        let bass = 0;
+        for (let i = 0; i < 10; i++) bass += boomboxFreqData[i];
+        bass /= 10;
+        const scale = bass > 130 ? 1.06 : 1;
+        boombox.style.transform = `scale(${scale})`;
+        boomboxAnimId = requestAnimationFrame(boomboxBeatLoop);
+    }
+
+    boombox.addEventListener('click', () => {
+        if (!boomboxAudio) {
+            // First click — initialise audio pipeline
+            boomboxAudio = new Audio('/resource/WhatYouGonnaBe.mp3');
+            boomboxCtx = new (window.AudioContext || window.webkitAudioContext)();
+            boomboxAnalyser = boomboxCtx.createAnalyser();
+            boomboxAnalyser.fftSize = 256;
+            boomboxFreqData = new Uint8Array(boomboxAnalyser.frequencyBinCount);
+            const source = boomboxCtx.createMediaElementSource(boomboxAudio);
+            source.connect(boomboxAnalyser);
+            boomboxAnalyser.connect(boomboxCtx.destination);
+
+            boomboxAudio.onended = () => {
+                boomboxPlaying = false;
+                boombox.classList.remove('shaking');
+                boombox.style.transform = '';
+            };
+
+            boomboxAudio.play().catch(() => {});
+            boomboxPlaying = true;
+            boombox.classList.add('shaking');
+            boomboxBeatLoop();
+        } else if (boomboxPlaying) {
+            // Pause
+            boomboxAudio.pause();
+            boomboxPlaying = false;
+            boombox.classList.remove('shaking');
+            boombox.style.transform = '';
+            if (boomboxAnimId) cancelAnimationFrame(boomboxAnimId);
+        } else {
+            // Resume
+            boomboxCtx.resume();
+            boomboxAudio.play().catch(() => {});
+            boomboxPlaying = true;
+            boombox.classList.add('shaking');
+            boomboxBeatLoop();
+        }
+    });
+
     // 시작 시 URL 입력창에 포커스
     elements.channelUrl.focus();
 

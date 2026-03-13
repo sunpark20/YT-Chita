@@ -75,6 +75,27 @@ body {
     padding: 0;
 }
 
+.boombox-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 300px;
+    height: 300px;
+    object-fit: contain;
+    cursor: pointer;
+    z-index: 10;
+    transition: transform 0.05s;
+}
+
+.boombox-overlay.shaking {
+    animation: boombox-shake 0.15s infinite alternate;
+}
+
+@keyframes boombox-shake {
+    0% { transform: rotate(-2deg) scale(1.02); }
+    100% { transform: rotate(2deg) scale(1.02); }
+}
+
 .app-icon-footer {
     display: inline-block;
     width: 32px;
