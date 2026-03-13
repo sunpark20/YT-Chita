@@ -22,6 +22,38 @@ from services.updater import update_ytdlp_on_startup
 logger = setup_logger("Main", logging.INFO)
 
 
+def _check_single_instance():
+    """이미 실행 중인 인스턴스가 있으면 종료"""
+    import socket
+
+    # 1) 포트 체크 (크로스 플랫폼) — 이미 서버가 떠 있는지 확인
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
+        result = sock.connect_ex((Config.HOST, Config.PORT))
+        sock.close()
+        if result == 0:  # 포트가 이미 열려 있음 = 다른 인스턴스 실행 중
+            logger.warning("Another instance is already running (port in use). Exiting.")
+            sys.exit(0)
+    except Exception:
+        pass
+
+    # 2) Windows Named Mutex — 더 확실한 방지
+    if sys.platform == 'win32':
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        mutex_name = "Global\\YouTubeBulkDownloaderMutex"
+        mutex = kernel32.CreateMutexW(None, True, mutex_name)
+        last_error = ctypes.get_last_error()
+        ERROR_ALREADY_EXISTS = 183
+        if last_error == ERROR_ALREADY_EXISTS:
+            logger.warning("Another instance is already running (mutex). Exiting.")
+            kernel32.CloseHandle(mutex)
+            sys.exit(0)
+        # mutex를 반환하지 않고 프로세스 수명 동안 유지 (GC 방지)
+        _check_single_instance._mutex = mutex
+
+
 def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
     """Log any uncaught exception before the process dies."""
     logger.critical(
@@ -127,6 +159,8 @@ def main():
     logger.info("=" * 70)
     logger.info(f"{Config.APP_NAME} v{Config.APP_VERSION}")
     logger.info("=" * 70)
+
+    _check_single_instance()
 
     # Step 0: Validate environment (PyObjC, ffmpeg, arch)
     _check_environment()
