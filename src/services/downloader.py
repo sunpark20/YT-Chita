@@ -248,13 +248,19 @@ class YouTubeDownloader:
         """
         # Ensure URL points to the channel's videos tab
         url = channel_url.rstrip('/')
-        
+
+        # Windows yt-dlp에서 한글 등 비-ASCII 경로가 404를 반환하는 문제 방지
+        from urllib.parse import quote, urlparse, urlunparse
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            url = urlunparse(parsed._replace(path=quote(parsed.path, safe='/@')))
+
         # Remove other channel tabs if present
         for tab in ['/featured', '/playlists', '/shorts', '/streams', '/community']:
             if url.endswith(tab):
                 url = url[:-len(tab)]
                 break
-                
+
         if not url.endswith('/videos'):
             url += '/videos'
 
