@@ -677,11 +677,11 @@ async def start_download(request: DownloadExtractRequest):
         elif filepath == "MEMBERSHIP_SKIP":
             # 멤버십 전용 영상 → 아카이브에 기록하여 다음에 스킵
             archive.add_video(request.video_id)
-            return {"success": True, "skipped": True, "message": "멤버십 전용 (스킵)", "reason": "멤버십"}
+            return {"success": True, "skipped": True, "message": "Membership (Skip)", "reason": "Membership"}
         elif filepath == "AGE_RESTRICTED_SKIP":
             # 성인인증 필요 영상 → 아카이브에 기록하여 다음에 스킵
             archive.add_video(request.video_id)
-            return {"success": True, "skipped": True, "message": "성인제한 (스킵)", "reason": "성인제한"}
+            return {"success": True, "skipped": True, "message": "Adult (Skip)", "reason": "Adult"}
         elif filepath:
             # 다운로드 성공 → 아카이브에 기록
             archive.add_video(request.video_id)

@@ -7,28 +7,48 @@
 // API Base URL
 const API_BASE = '/api';
 
-// Loading messages (Hearthstone-style witty messages)
+// Loading messages — Korean/English alternating
 const LOADING_MESSAGES = [
     '유튜브 서버를 설득하는 중...',
-    '인내는 쓰다. 그 열매는 달다.\n― 아리스토텔레스',
+    'Patience is bitter, but its fruit is sweet.\n― Aristotle',
     '서버 햄스터가 쳇바퀴를 돌리는 중...',
+    'The server hamster is running on its wheel...',
     '천 리 길도 한 걸음부터.\n― 노자',
+    'A journey of a thousand miles begins with a single step.\n― Lao Tzu',
     '데이터가 택배 기사를 기다리는 중...',
+    'Good things come to those who wait.\n― English Proverb',
     '급할수록 돌아가라.\n― 한국 속담',
-    '영상 목록이 줄을 서는 중...',
+    'Slow and steady wins the race.\n― Aesop',
     '시작이 반이다. 지금 반은 했다.',
+    'Well begun is half done.\n― Aristotle',
     '유튜브가 심호흡하는 중...',
-    '모든 위대한 일은 느리게 시작된다.\n― 토마스 칼라일',
-    '잠깐, 뭔가 대단한 일이 일어나고 있다...',
-    '기다림의 미학을 실천하는 중...',
+    'YouTube is taking a deep breath...',
     '서버가 커피를 내리는 중...',
-    '좋은 것은 기다리는 자에게 온다.\n― 영국 속담',
+    'The server is brewing coffee...',
+    '잠깐, 뭔가 대단한 일이 일어나고 있다...',
+    'Something amazing is happening...',
+    '기다림의 미학을 실천하는 중...',
+    'The best things in life are worth waiting for.',
     '알고리즘이 워밍업하는 중...',
+    'The algorithm is warming up...',
     '빠른 것보다 정확한 게 낫다.',
+    'It does not matter how slowly you go,\nas long as you do not stop.\n― Confucius',
     '구글 서버에 정중하게 노크하는 중...',
+    'Politely knocking on Google servers...',
     '아직 여기 있다. 도망 안 갔다.',
+    'Still here. Didn\'t run away.',
     '위대한 영상에는 위대한 인내가 필요하다.',
+    'Great videos require great patience.',
     '잠깐이면 된다. 아마도. 거의. 곧.',
+    'Just a moment. Probably. Almost. Soon.',
+    '인내는 쓰다. 그 열매는 달다.\n― 아리스토텔레스',
+    'Stay hungry, stay foolish.\n― Steve Jobs',
+    '모든 위대한 일은 느리게 시작된다.\n― 토마스 칼라일',
+    'All great things start slowly.\n― Thomas Carlyle',
+    '좋은 것은 기다리는 자에게 온다.\n― 영국 속담',
+    'Have patience. All things are difficult\nbefore they become easy.\n― Saadi',
+    '로딩은 예술이다. 지금 감상 중...',
+    'Loading is an art. Enjoy the show...',
 ];
 
 // State
@@ -565,7 +585,7 @@ function updateSelectionCount() {
     const count = selectedVideos.size;
     elements.videoCount.textContent = count;
     const btnText = elements.downloadAllBtn.querySelector('.btn-text');
-    btnText.textContent = `받기 (${count}개)`;
+    btnText.innerHTML = `<svg width="18" height="18" viewBox="0 0 29.978 29.978" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M25.462,19.105v6.848H4.515v-6.848H0.489v8.861c0,1.111,0.9,2.012,2.016,2.012h24.967c1.115,0,2.016-0.9,2.016-2.012v-8.861H25.462z"/><path d="M14.62,18.426l-5.764-6.965c0,0-0.877-0.828,0.074-0.828s3.248,0,3.248,0s0-0.557,0-1.416c0-2.449,0-6.906,0-8.723c0,0-0.129-0.494,0.615-0.494c0.75,0,4.035,0,4.572,0c0.536,0,0.524,0.416,0.524,0.416c0,1.762,0,6.373,0,8.742c0,0.768,0,1.266,0,1.266s1.842,0,2.998,0c1.154,0,0.285,0.867,0.285,0.867s-4.904,6.51-5.588,7.193C15.092,18.979,14.62,18.426,14.62,18.426z"/></svg> (${count})`;
     elements.downloadAllBtn.disabled = count === 0;
 }
 
@@ -642,7 +662,7 @@ async function downloadAll() {
             const video = currentVideos[i];
 
             updateProgress();
-            updateVideoRow(i, 'downloading', '다운로드 중');
+            updateVideoRow(i, 'downloading', 'Downloading');
 
             // video_id별 진행률 폴링
             let dotCount = 0;
@@ -654,7 +674,7 @@ async function downloadAll() {
                         updateVideoRow(i, 'downloading', parts.join(' \u00b7 '));
                     } else if (prog.status === 'converting') {
                         dotCount = (dotCount % 3) + 1;
-                        updateVideoRow(i, 'downloading', '오디오 변환 중' + '.'.repeat(dotCount));
+                        updateVideoRow(i, 'downloading', 'Converting audio' + '.'.repeat(dotCount));
                     }
                 } catch (_) {}
             }, 1000);
@@ -680,17 +700,17 @@ async function downloadAll() {
                 const data = await response.json();
 
                 if (data.cancelled) {
-                    updateVideoRow(i, 'stopped', '중단됨');
+                    updateVideoRow(i, 'stopped', 'Stopped');
                     stopped = true;
                     break;
                 } else if (response.ok && data.success) {
                     if (data.skipped) {
                         skipped++;
-                        updateVideoRow(i, 'skip', data.reason ? `스킵 · ${data.reason}` : '스킵');
+                        updateVideoRow(i, 'skip', data.reason ? `Skip (${data.reason})` : 'Skip');
                     } else {
                         completed++;
                         const prog = await fetch(`${API_BASE}/download/progress/${video.id}`).then(r => r.json()).catch(() => ({}));
-                        updateVideoRow(i, 'success', prog.total ? `완료 \u00b7 ${prog.total}` : '완료');
+                        updateVideoRow(i, 'success', prog.total ? `✔ ${prog.total}` : '✔');
                     }
                     doneCount++;
                     updateProgress();
@@ -701,13 +721,13 @@ async function downloadAll() {
             } catch (error) {
                 clearInterval(pollId);
                 if (error.name === 'AbortError' || stopRequested) {
-                    updateVideoRow(i, 'stopped', '중단됨');
+                    updateVideoRow(i, 'stopped', 'Stopped');
                     stopped = true;
                     break;
                 }
                 console.error(`Error downloading ${video.title}:`, error);
                 failed++;
-                updateVideoRow(i, 'error', '실패');
+                updateVideoRow(i, 'error', 'Failed');
                 doneCount++;
                 updateProgress();
             }
@@ -720,20 +740,20 @@ async function downloadAll() {
     // 중지 시 남은 큐 항목 '중지됨' 표시
     if (stopped || stopRequested) {
         for (let qi = queueIndex; qi < queue.length; qi++) {
-            updateVideoRow(queue[qi], 'stopped', '중지됨');
+            updateVideoRow(queue[qi], 'stopped', 'Stopped');
         }
         stopped = true;
     }
 
     // Summary via modal
     const parts = [];
-    if (completed > 0) parts.push(`성공: ${completed}`);
-    if (skipped > 0) parts.push(`스킵: ${skipped}`);
-    if (failed > 0) parts.push(`실패: ${failed}`);
-    if (stopped) parts.push(`중지됨: ${totalSelected - completed - skipped - failed}`);
+    if (completed > 0) parts.push(`Done: ${completed}`);
+    if (skipped > 0) parts.push(`Skip: ${skipped}`);
+    if (failed > 0) parts.push(`Failed: ${failed}`);
+    if (stopped) parts.push(`Stopped: ${totalSelected - completed - skipped - failed}`);
     const { displayPath, folderPath } = buildSavePaths();
 
-    elements.completeTitle.textContent = stopped ? '다운로드 중지됨' : '다운로드 완료';
+    elements.completeTitle.textContent = stopped ? 'Download Stopped' : 'Download Complete';
     elements.completeSummary.textContent = parts.join(' · ');
     elements.completePath.textContent = displayPath;
     elements.openFolderBtn.onclick = () => { openDownloadFolder(folderPath); elements.completeModal.style.display = 'none'; };
@@ -769,7 +789,7 @@ function updateVideoRow(index, type, statusText) {
     statusEl.textContent = statusText;
 
     // 다운로드 시작·완료 상태에서만 스크롤 (진행률 갱신 중에는 스크롤 안 함)
-    if (type !== 'downloading' || statusText === '다운로드 중') {
+    if (type !== 'downloading' || statusText === 'Downloading') {
         row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 }
@@ -791,7 +811,7 @@ async function checkApiKeyStatus() {
         const data = await response.json();
 
         if (data.has_api_key) {
-            elements.apiKeyStatus.textContent = 'API Key 적용됨';
+            elements.apiKeyStatus.textContent = 'API Key OK';
             elements.apiKeyStatus.className = 'api-key-badge badge-active';
             const savedApiKey = localStorage.getItem('youtube_api_key');
             if (savedApiKey) {
@@ -801,7 +821,7 @@ async function checkApiKeyStatus() {
             elements.apiKeyMessage.textContent = '현재 API 키가 등록되어 있습니다. 변경하려면 새 키를 입력하세요.';
             elements.apiKeyMessage.className = 'settings-message success';
         } else {
-            elements.apiKeyStatus.textContent = 'API 키를 추가하면 더 빠르게 분석할 수 있습니다.';
+            elements.apiKeyStatus.textContent = 'No API Key';
             elements.apiKeyStatus.className = 'api-key-badge badge-fallback';
             elements.apiKeyInput.placeholder = 'YouTube Data API v3 키 입력';
             elements.apiKeyMessage.textContent = '';

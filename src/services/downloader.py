@@ -85,13 +85,13 @@ class YTBulkDownloader:
 
     @staticmethod
     def _format_bytes(b: int) -> str:
-        """Format bytes to human readable string (MiB/GiB)"""
+        """Format bytes to human readable string (MB/GB)"""
         if b < 1024 ** 2:
-            return f"{b / 1024:.2f}KiB"
+            return f"{b / 1024:.2f}KB"
         elif b < 1024 ** 3:
-            return f"{b / 1024 ** 2:.2f}MiB"
+            return f"{b / 1024 ** 2:.2f}MB"
         else:
-            return f"{b / 1024 ** 3:.2f}GiB"
+            return f"{b / 1024 ** 3:.2f}GB"
 
     @staticmethod
     def _strip_ansi(s: str) -> str:
