@@ -52,6 +52,11 @@ https://github.com/sunpark20/YT-Chita/releases
 - Adding a YouTube API key reduces errors and speeds up video analysis. Recommended when downloading 100+ videos.
 
 
+## Disclaimer
+
+This app is intended for personal offline viewing, backup, and other lawful purposes. Unauthorized distribution of copyrighted content is the user's responsibility.
+
+
 ## License
 
 This project is released under [The Unlicense](https://unlicense.org/).

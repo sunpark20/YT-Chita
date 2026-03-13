@@ -49,6 +49,11 @@ https://github.com/sunpark20/YT-Chita/releases
 - API 키 추가하면, 오류 덜 나고 영상 분석이 빨라집니다. 100개 이상 영상 받을 때 추천
 
 
+## Disclaimer
+
+이 앱은 개인 오프라인 시청, 백업 등 합법적 용도를 위해 만들어졌습니다. 저작권이 있는 콘텐츠의 무단 배포는 사용자의 책임입니다.
+
+
 ## License
 
 이 프로젝트는 [The Unlicense](https://unlicense.org/)로 배포됩니다.

@@ -28,13 +28,13 @@
 
 ## 빌드 절차
 
-1. **버전 번호 확인**: 사용자에게 정확한 버전 번호를 반드시 확인받고 진행
+1. **버전 번호 확인**: 사용자가 명시하면 그 버전 사용, 명시하지 않으면 현재 버전에서 patch +1 (예: 1.2.5 → 1.2.6)
 2. **버전 올리기**: `src/utils/config.py`의 `APP_VERSION` 수정
 3. **릴리즈 노트 작성**: `build.yml`의 `body:` 섹션 전체를 새 버전에 맞게 수정
-4. **빌드 전 검증**: `python -c "import py_compile; ..."` 등으로 주요 파일 구문 오류 확인. `git ls-files YT-Chita.spec`으로 spec 파일이 tracked 상태인지도 확인
+4. **빌드 전 검증**: `python3 -c "import py_compile; ..."` 등으로 주요 파일 구문 오류 확인. `git ls-files YT-Chita.spec`으로 spec 파일이 tracked 상태인지도 확인 (이 환경에서 `python` 명령은 없고 `python3`만 있음)
 5. **커밋 & 푸시**
 6. **태그 생성 & 푸시** → 빌드 자동 트리거
-7. `gh run watch`로 빌드 모니터링
+7. **빌드 모니터링**: `gh run list --limit 1`로 run ID 조회 후 `gh run watch <run-id> --exit-status`로 모니터링 (`gh run watch`는 run ID 없이 실행 불가)
 
 ## 태그 재생성 (빌드 재실행)
 

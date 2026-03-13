@@ -1,6 +1,6 @@
 ---
 name: post-command-improve
-description: "이 스킬은 /project: 커맨드(c-github-build, c-log-debug 등)가 완료된 직후 Claude가 반드시 Skill tool로 호출해야 하는 사후 개선 스킬이다. 트리거 시점: 사용자가 /project: 커맨드를 실행하고, 그 커맨드의 모든 작업(빌드 모니터링, 로그 분석 등)이 끝나서 사용자에게 최종 결과를 보고한 직후. 이 시점에서 다른 작업 없이 즉시 이 스킬을 호출할 것. 호출하지 않으면 커맨드 품질이 개선되지 않아 같은 실수가 반복된다."
+description: "MANDATORY post-action hook: After ANY /project: command (c-github-build, c-log-debug, etc.) finishes and you report results to the user, you MUST immediately call this skill via Skill tool. Trigger signal: you just told the user a build succeeded/failed, or finished analyzing logs, or completed any /project: command task. If you see 'gh run watch' output, build success/failure message, or log analysis summary in your recent messages, STOP and call this skill NOW before doing anything else. Skipping this causes repeated mistakes because command files never get improved."
 ---
 
 # 커맨드 사후 개선
