@@ -169,6 +169,7 @@ def start_fastapi_server(port: int):
             port=port,
             log_level="error",
             access_log=False,
+            log_config=None,
         )
 
         server = uvicorn.Server(config)

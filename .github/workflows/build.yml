@@ -160,19 +160,11 @@ jobs:
         with:
           generate_release_notes: true
           body: |
-            ## v1.2.8
+            ## v1.2.9 Hotfix
 
-            ### Windows: Silent Crash Fix
-            - Windows에서 앱 실행 시 무반응/무음 크래시 문제 수정
-            - 에러 발생 시 Windows MessageBox로 원인 표시 + 로그 경로 안내
-            - 서버 시작 실패, WebView 로드 실패, 포트 충돌 등 모든 시작 오류 가시화
-
-            ### Auto Port Recovery
-            - 포트 8000 충돌 시 자동으로 다음 포트(8001~8009) 탐색 후 실행
-            - 중복 인스턴스 감지를 health endpoint 기반으로 개선 (다른 앱 오판 방지)
-
-            ### Max Videos Increased
-            - 채널/플레이리스트 최대 분석 영상 수 500 → 2000으로 확대
+            ### Windows Crash Fix
+            - 일부 Windows 환경에서 서버 시작 실패하던 문제 수정 (uvicorn 로깅 설정 오류)
+            - "Unable to configure formatter 'default'" 에러 해결
           files: |
             YTChita-Mac-Intel/YTChita-Mac-Intel.dmg
             YTChita-Mac-MChip/YTChita-Mac-MChip.dmg

@@ -29,7 +29,7 @@ class Config:
 
     # Application
     APP_NAME = "YT Chita"
-    APP_VERSION = "1.2.8"
+    APP_VERSION = "1.2.9"
 
     # Server
     HOST = "127.0.0.1"

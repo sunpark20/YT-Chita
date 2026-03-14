@@ -8,9 +8,9 @@
 
 | 플랫폼 | 러너 | 결과물 |
 |--------|------|--------|
-| Mac M-Chip (arm64) | `macos-latest` | `YB-Mac-M-Chip.dmg` |
-| Mac Intel (x86_64) | `macos-15-intel` | `YB-Mac-Intel.dmg` |
-| Windows 10/11 64bit | `windows-latest` | `YB-Windows10_11-64bit.zip` |
+| Mac M-Chip (arm64) | `macos-latest` | `YTChita-Mac-MChip.dmg` |
+| Mac Intel (x86_64) | `macos-15-intel` | `YTChita-Mac-Intel.dmg` |
+| Windows 10/11 64bit | `windows-latest` | `YTChita-Windows10_11-64bit.zip` |
 
 ## 러너 주의사항
 
@@ -28,13 +28,49 @@
 
 ## 빌드 절차
 
-1. **버전 번호 확인**: 사용자가 명시하면 그 버전 사용, 명시하지 않으면 현재 버전에서 patch +1 (예: 1.2.5 → 1.2.6)
-2. **버전 올리기**: `src/utils/config.py`의 `APP_VERSION` 수정
-3. **릴리즈 노트 작성**: `build.yml`의 `body:` 섹션 전체를 새 버전에 맞게 수정
-4. **빌드 전 검증**: `python3 -c "import py_compile; ..."` 등으로 주요 파일 구문 오류 확인. `git ls-files YT-Chita.spec`으로 spec 파일이 tracked 상태인지도 확인 (이 환경에서 `python` 명령은 없고 `python3`만 있음)
-5. **커밋 & 푸시**
-6. **태그 생성 & 푸시** → 빌드 자동 트리거
-7. **빌드 모니터링**: `gh run list --limit 1`로 run ID 조회 후 `gh run watch <run-id> --exit-status`로 모니터링 (`gh run watch`는 run ID 없이 실행 불가)
+### 1. 버전 번호 확인
+사용자가 명시하면 그 버전 사용, 명시하지 않으면 현재 버전에서 patch +1 (예: 1.2.5 → 1.2.6)
+
+### 2. 버전 올리기
+`src/utils/config.py`의 `APP_VERSION` 수정
+
+### 3. 릴리즈 노트 작성
+`build.yml`의 `body:` 섹션 전체를 새 버전에 맞게 수정
+
+### 4. README.md 업데이트 내역 반영
+`README.md`의 `## 업데이트` 섹션 상단에 새 버전 내역 추가.
+build.yml에 작성한 릴리즈 노트를 기반으로, 아래 형식으로 기존 내역 위에 추가:
+```
+### v1.2.x (YYYY-MM-DD)
+- 변경사항 1
+- 변경사항 2
+```
+기존 버전 내역은 삭제하지 않고 아래에 유지. 날짜는 오늘 날짜 사용.
+
+> **이 단계를 빼먹으면 릴리즈 페이지는 v1.2.x인데 README는 구버전으로 남는다.**
+> v1.2.8 때 실제로 이 실수가 발생했다. 절대 건너뛰지 마라.
+
+### 5. 빌드 전 검증
+`python3 -c "import py_compile; ..."` 등으로 주요 파일 구문 오류 확인.
+`git ls-files YT-Chita.spec`으로 spec 파일이 tracked 상태인지도 확인.
+(이 환경에서 `python` 명령은 없고 `python3`만 있음)
+
+### 6. 커밋 전 체크리스트 (필수)
+커밋하기 전에 아래 3개를 반드시 확인하고, 사용자에게 체크 결과를 보여줘라:
+- [ ] `config.py`의 APP_VERSION이 새 버전으로 바뀌었는가?
+- [ ] `build.yml`의 body에 새 버전 릴리즈 노트가 작성되었는가?
+- [ ] `README.md`의 `## 업데이트` 섹션에 새 버전 내역이 추가되었는가?
+
+하나라도 빠지면 커밋하지 말고 빠진 것부터 처리.
+
+### 7. 커밋 & 푸시
+
+### 8. 태그 생성 & 푸시
+→ 빌드 자동 트리거
+
+### 9. 빌드 모니터링
+`gh run list --limit 1`로 run ID 조회 후 `gh run watch <run-id> --exit-status`로 모니터링
+(`gh run watch`는 run ID 없이 실행 불가)
 
 ## 태그 재생성 (빌드 재실행)
 
@@ -67,3 +103,4 @@ git push origin v1.x.x
 - `YT-Chita.spec` — PyInstaller 설정
 - `entitlements.plist` — macOS 코드 서명 권한
 - `src/utils/config.py` — 앱 버전
+- `README.md` — 업데이트 내역 섹션
