@@ -87,7 +87,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='YT-Chita',
+    name='ytninza',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -108,19 +108,19 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='YT-Chita',
+    name='ytninza',
 )
 
 if is_macos:
     app = BUNDLE(
         coll,
-        name='YT-Chita.app',
+        name='ytninza.app',
         icon=icon_file,
         bundle_identifier='com.sunpark.YouTubeDownloader',
         version=app_version,
         info_plist={
-            'CFBundleDisplayName': 'YT Chita',
-            'CFBundleName': 'YT Chita',
+            'CFBundleDisplayName': 'ytninza',
+            'CFBundleName': 'ytninza',
             'CFBundleShortVersionString': app_version,
             'CFBundleVersion': app_version,
             'NSHighResolutionCapable': True,

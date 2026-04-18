@@ -56,7 +56,7 @@ def create_dmg_background(output: Path | str = None) -> Path:
 
     draw.text(
         (W // 2, H - 40),
-        "Drag YT-Chita to Applications to install",
+        "Drag ytninza to Applications to install",
         fill=(130, 130, 130),
         font=font_small,
         anchor="mt",

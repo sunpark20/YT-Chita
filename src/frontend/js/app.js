@@ -1,13 +1,9 @@
 /**
- * YouTube ALL DOWNLOADER - Frontend Application
- *
- * Main JavaScript logic for the desktop application
+ * ytninza — Frontend Application
  */
 
-// API Base URL
 const API_BASE = '/api';
 
-// Loading messages — Korean/English alternating
 const LOADING_MESSAGES = [
     '유튜브 서버를 설득하는 중...',
     'Patience is bitter, but its fruit is sweet.\n― Aristotle',
@@ -51,76 +47,79 @@ const LOADING_MESSAGES = [
     'Loading is an art. Enjoy the show...',
 ];
 
-// State
+// ── Icons (Lucide subset) ─────────────────────────
+const ICONS = {
+    check: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    folder: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>',
+};
+function icon(name, size = 20) {
+    return ICONS[name].replace(/width="\d+"/, `width="${size}"`).replace(/height="\d+"/, `height="${size}"`);
+}
+
+// ── State ─────────────────────────────────────────
 let currentVideos = [];
 let currentChannelName = '';
 let currentPlaylistName = '';
 let currentUrlType = '';
+let currentFormat = '720p';
 let isAnalyzing = false;
 let isDownloading = false;
 let stopRequested = false;
-let currentDownloadControllers = [];  // 2개 동시 abort 지원
+let currentDownloadControllers = [];
 let selectedVideos = new Set();
 let currentDownloadDir = '';
 
-// DOM Elements
+// ── DOM Elements ──────────────────────────────────
 const elements = {
     channelUrl: document.getElementById('channelUrl'),
-    quality: document.getElementById('quality'),
+    searchBox: document.getElementById('searchBox'),
+    clearUrlBtn: document.getElementById('clearUrlBtn'),
     includeShorts: document.getElementById('includeShorts'),
     analyzeBtn: document.getElementById('analyzeBtn'),
-    resultsSection: document.getElementById('resultsSection'),
     downloadAllBtn: document.getElementById('downloadAllBtn'),
     videoList: document.getElementById('videoList'),
 
-    // Stats
     totalVideos: document.getElementById('totalVideos'),
     alreadyDownloaded: document.getElementById('alreadyDownloaded'),
-    videoCount: document.getElementById('videoCount'),
 
-    // Progress
     progressWrap: document.getElementById('progressWrap'),
     stopDownloadBtn: document.getElementById('stopDownloadBtn'),
     progressFill: document.getElementById('progressFill'),
     progressText: document.getElementById('progressText'),
 
-    // Status
-    statusText: document.getElementById('statusText'),
-    ytdlpVersion: document.getElementById('ytdlpVersion'),
-
-    // Settings
     settingsBtn: document.getElementById('settingsBtn'),
     settingsPanel: document.getElementById('settingsPanel'),
+    settingsCloseBtn: document.getElementById('settingsCloseBtn'),
     apiKeyInput: document.getElementById('apiKeyInput'),
     saveApiKeyBtn: document.getElementById('saveApiKeyBtn'),
     deleteApiKeyBtn: document.getElementById('deleteApiKeyBtn'),
     apiKeyMessage: document.getElementById('apiKeyMessage'),
-    apiKeyStatus: document.getElementById('apiKeyStatus'),
 
-    // Select All
-    selectAllCheckbox: document.getElementById('selectAllCheckbox'),
+    selectAllBox: document.getElementById('selectAllBox'),
+    selectCount: document.getElementById('selectCount'),
+    actionFooter: document.getElementById('actionFooter'),
+    resultsHeader: document.getElementById('resultsHeader'),
 
-    // Help
+    emptyState: document.getElementById('emptyState'),
+    analyzingState: document.getElementById('analyzingState'),
+
     helpBtn: document.getElementById('helpBtn'),
     helpModal: document.getElementById('helpModal'),
     helpCloseBtn: document.getElementById('helpCloseBtn'),
 
-    // Complete Modal
     completeModal: document.getElementById('completeModal'),
     completeTitle: document.getElementById('completeTitle'),
     completeSummary: document.getElementById('completeSummary'),
     completePath: document.getElementById('completePath'),
     openFolderBtn: document.getElementById('openFolderBtn'),
     completeCloseBtn: document.getElementById('completeCloseBtn'),
+
+    doneToast: document.getElementById('doneToast'),
+    doneToastClose: document.getElementById('doneToastClose'),
 };
 
-/**
- * Initialize application
- */
+// ── Init ──────────────────────────────────────────
 async function init() {
-    console.log('Initializing YouTube ALL DOWNLOADER...');
-
-    // Load saved API key from localStorage
     const savedApiKey = localStorage.getItem('youtube_api_key');
     if (savedApiKey) {
         try {
@@ -134,59 +133,83 @@ async function init() {
         }
     }
 
-    // Check health and settings
     await checkHealth();
     await checkApiKeyStatus();
     await loadDownloadDir();
 
-    // Setup event listeners
-    elements.analyzeBtn.addEventListener('click', analyzeUrl);
+    // ── Format pills (roving tabindex) ──
+    const pills = [...document.querySelectorAll('.format-pill')];
+    function selectPill(pill) {
+        pills.forEach(p => { p.classList.remove('active'); p.tabIndex = -1; p.setAttribute('aria-checked', 'false'); });
+        pill.classList.add('active');
+        pill.tabIndex = 0;
+        pill.setAttribute('aria-checked', 'true');
+        pill.focus();
+        currentFormat = pill.dataset.value;
+    }
+    pills.forEach(pill => {
+        pill.addEventListener('click', () => selectPill(pill));
+        pill.addEventListener('keydown', (e) => {
+            const idx = pills.indexOf(pill);
+            let next = null;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                next = pills[(idx + 1) % pills.length];
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                next = pills[(idx - 1 + pills.length) % pills.length];
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                elements.analyzeBtn.click();
+                return;
+            }
+            if (next) { e.preventDefault(); selectPill(next); }
+        });
+    });
 
-    // Enter 키 → 형식 select로 포커스 이동 & 펼침
+    // ── URL input ──
+    elements.analyzeBtn.addEventListener('click', analyzeUrl);
     elements.channelUrl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
-            const q = elements.quality;
-            q.focus();
-            q.size = q.options.length;
-            q.classList.add('expanded');
+            const active = pills.find(p => p.classList.contains('active')) || pills[0];
+            active.focus();
         }
     });
-
-    // Select 키보드 리스너: Enter → 분석 시작, Escape → 접기
-    elements.quality.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            elements.quality.size = 0;
-            elements.quality.classList.remove('expanded');
-            elements.analyzeBtn.click();
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            elements.quality.size = 0;
-            elements.quality.classList.remove('expanded');
-            elements.channelUrl.focus();
-        }
+    elements.channelUrl.addEventListener('input', () => {
+        elements.clearUrlBtn.style.display = elements.channelUrl.value ? '' : 'none';
+    });
+    elements.channelUrl.addEventListener('focus', () => elements.searchBox.classList.add('focused'));
+    elements.channelUrl.addEventListener('blur', () => elements.searchBox.classList.remove('focused'));
+    elements.clearUrlBtn.addEventListener('click', () => {
+        elements.channelUrl.value = '';
+        elements.clearUrlBtn.style.display = 'none';
+        elements.channelUrl.focus();
     });
 
-    // Select blur → 접기 (포커스 잃을 때만)
-    elements.quality.addEventListener('blur', () => {
-        elements.quality.size = 0;
-        elements.quality.classList.remove('expanded');
+    // ── Select All ──
+    const selectAllEl = document.getElementById('selectAllToggle');
+    selectAllEl.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); selectAllEl.click(); }
     });
-    elements.selectAllCheckbox.addEventListener('change', () => {
-        const checked = elements.selectAllCheckbox.checked;
-        document.querySelectorAll('.video-checkbox').forEach(cb => {
-            cb.checked = checked;
-        });
-        if (checked) {
-            currentVideos.forEach((_, i) => selectedVideos.add(i));
-        } else {
+    selectAllEl.addEventListener('click', () => {
+        if (isDownloading) return;
+        const allSelected = selectedVideos.size === currentVideos.length;
+        if (allSelected) {
             selectedVideos.clear();
+        } else {
+            currentVideos.forEach((_, i) => selectedVideos.add(i));
         }
+        document.querySelectorAll('.video-cb').forEach((cb, i) => {
+            cb.classList.toggle('checked', selectedVideos.has(i));
+        });
+        document.querySelectorAll('.video-item').forEach((row, i) => {
+            row.classList.toggle('unselected', !selectedVideos.has(i));
+        });
+        syncSelectAll();
         updateSelectionCount();
         if (selectedVideos.size > 0) elements.downloadAllBtn.focus();
     });
-    // Video list keyboard navigation: Arrow keys + Space + Enter
+
+    // ── Video list keyboard ──
     elements.videoList.addEventListener('keydown', (e) => {
         const items = [...elements.videoList.querySelectorAll('.video-item')];
         const focused = document.activeElement.closest('.video-item');
@@ -202,58 +225,50 @@ async function init() {
             if (target) { target.focus(); target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
         } else if (e.key === ' ') {
             e.preventDefault();
-            if (focused) {
-                const cb = focused.querySelector('.video-checkbox');
-                if (cb) {
-                    cb.checked = !cb.checked;
-                    cb.dispatchEvent(new Event('change'));
-                }
-            }
+            if (focused && !isDownloading) toggleVideoSelection(idx);
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            if (selectedVideos.size > 0 && !isDownloading) {
-                elements.downloadAllBtn.click();
-            }
+            if (selectedVideos.size > 0 && !isDownloading) elements.downloadAllBtn.click();
         }
     });
+
+    // ── Download ──
     elements.downloadAllBtn.addEventListener('click', downloadAll);
     elements.stopDownloadBtn.addEventListener('click', async () => {
         if (isDownloading) {
             stopRequested = true;
             elements.stopDownloadBtn.disabled = true;
             elements.stopDownloadBtn.style.opacity = '0.5';
-            // 서버에 즉시 취소 요청
-            try {
-                await fetch(`${API_BASE}/download/cancel`, { method: 'POST' });
-            } catch (_) {}
-            // 진행 중인 fetch 요청 모두 abort
+            try { await fetch(`${API_BASE}/download/cancel`, { method: 'POST' }); } catch (_) {}
             currentDownloadControllers.forEach(c => c.abort());
             currentDownloadControllers = [];
         }
     });
+
+    // ── Settings ──
     elements.settingsBtn.addEventListener('click', toggleSettings);
+    elements.settingsCloseBtn.addEventListener('click', closeSettings);
     elements.saveApiKeyBtn.addEventListener('click', saveApiKey);
-    if (elements.deleteApiKeyBtn) {
-        elements.deleteApiKeyBtn.addEventListener('click', deleteApiKey);
-    }
+    if (elements.deleteApiKeyBtn) elements.deleteApiKeyBtn.addEventListener('click', deleteApiKey);
     document.getElementById('openLogFolderBtn')?.addEventListener('click', async () => {
-        try {
-            await fetch(`${API_BASE}/open-log-folder`, { method: 'POST' });
-        } catch (e) {
-            alert('로그 폴더를 열 수 없습니다.');
-        }
+        try { await fetch(`${API_BASE}/open-log-folder`, { method: 'POST' }); } catch (_) {}
     });
     document.getElementById('browseFolderBtn')?.addEventListener('click', browseFolder);
     document.getElementById('resetFolderBtn')?.addEventListener('click', resetDownloadDir);
+
+    // ── Help modal ──
     elements.helpBtn.addEventListener('click', () => elements.helpModal.style.display = 'flex');
     elements.helpCloseBtn.addEventListener('click', () => elements.helpModal.style.display = 'none');
     elements.helpModal.addEventListener('click', (e) => {
         if (e.target === elements.helpModal) elements.helpModal.style.display = 'none';
     });
+
+    // ── Folder button ──
     document.getElementById('openDownloadFolderBtn').addEventListener('click', () => {
-        const { folderPath } = buildSavePaths();
-        openDownloadFolder(folderPath);
+        openDownloadFolder(buildSavePaths().folderPath);
     });
+
+    // ── Complete modal ──
     elements.completeCloseBtn.addEventListener('click', () => elements.completeModal.style.display = 'none');
     elements.completeModal.addEventListener('click', (e) => {
         if (e.target === elements.completeModal) elements.completeModal.style.display = 'none';
@@ -267,141 +282,89 @@ async function init() {
         }
     });
 
-    // App icon click animation
-    const appIcon = document.getElementById('appIcon');
-    appIcon.addEventListener('click', () => {
-        appIcon.classList.add('animating');
-        // const boilAudio = new Audio('/resource/BoilingPod.mp3');
-        // boilAudio.play().catch(() => {});
-        setTimeout(() => {
-            appIcon.classList.remove('animating');
-            // boilAudio.pause();
-        }, 4000);
+    // ── Done toast ──
+    elements.doneToastClose.addEventListener('click', () => {
+        elements.doneToast.style.display = 'none';
     });
 
-    // Boombox easter egg — click to play/pause music with beat detection
-    const boombox = document.getElementById('boombox');
-    let boomboxAudio = null;
-    let boomboxCtx = null;
-    let boomboxAnalyser = null;
-    let boomboxPlaying = false;
-    let boomboxAnimId = null;
-    let boomboxFreqData = null;
+    // ── Zoom ──
+    const ZOOM_STEP = 10;
+    const ZOOM_MIN = 80;
+    const ZOOM_MAX = 150;
+    let zoomPct = parseInt(localStorage.getItem('ytninza_zoom') || '100', 10);
+    const zoomLevelEl = document.getElementById('zoomLevel');
 
-    function boomboxBeatLoop() {
-        if (!boomboxPlaying) return;
-        boomboxAnalyser.getByteFrequencyData(boomboxFreqData);
-        // Average of low-frequency bins (0–10) for bass detection
-        let bass = 0;
-        for (let i = 0; i < 10; i++) bass += boomboxFreqData[i];
-        bass /= 10;
-        const scale = bass > 130 ? 1.06 : 1;
-        boombox.style.transform = `scale(${scale})`;
-        boomboxAnimId = requestAnimationFrame(boomboxBeatLoop);
+    function applyZoom() {
+        document.body.style.zoom = (zoomPct / 100).toString();
+        zoomLevelEl.textContent = zoomPct + '%';
+        localStorage.setItem('ytninza_zoom', zoomPct);
     }
-
-    boombox.addEventListener('click', () => {
-        if (!boomboxAudio) {
-            // First click — initialise audio pipeline
-            // boomboxAudio = new Audio('/resource/WhatYouGonnaBe.mp3');
-            // ... (Audio initialization commented out)
-            // boomboxAudio.play().catch(() => {});
-            boomboxPlaying = true;
-            boombox.classList.add('shaking');
-            // boomboxBeatLoop();
-        } else if (boomboxPlaying) {
-            // Pause
-            // boomboxAudio.pause();
-            boomboxPlaying = false;
-            boombox.classList.remove('shaking');
-            boombox.style.transform = '';
-            if (boomboxAnimId) cancelAnimationFrame(boomboxAnimId);
-        } else {
-            // Resume
-            // boomboxCtx.resume();
-            // boomboxAudio.play().catch(() => {});
-            boomboxPlaying = true;
-            boombox.classList.add('shaking');
-            // boomboxBeatLoop();
+    document.getElementById('zoomInBtn').addEventListener('click', () => {
+        zoomPct = Math.min(zoomPct + ZOOM_STEP, ZOOM_MAX);
+        applyZoom();
+    });
+    document.getElementById('zoomOutBtn').addEventListener('click', () => {
+        zoomPct = Math.max(zoomPct - ZOOM_STEP, ZOOM_MIN);
+        applyZoom();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (!e.shiftKey) return;
+        if (e.key === '+' || e.key === '=') {
+            e.preventDefault();
+            zoomPct = Math.min(zoomPct + ZOOM_STEP, ZOOM_MAX);
+            applyZoom();
+        } else if (e.key === '-' || e.key === '_') {
+            e.preventDefault();
+            zoomPct = Math.max(zoomPct - ZOOM_STEP, ZOOM_MIN);
+            applyZoom();
         }
     });
+    applyZoom();
 
-    // 시작 시 URL 입력창에 포커스
     elements.channelUrl.focus();
-
-    console.log('Application initialized!');
 }
 
-/**
- * Check API health and get version info
- */
+// ── Health ─────────────────────────────────────────
 async function checkHealth() {
     try {
         const response = await fetch(`${API_BASE}/health`);
         const data = await response.json();
-
-        if (data.status === 'healthy') {
-            if (data.ytdlp_version) {
-                // 년도를 2자리로 축약 (2026 → 26)
-                const shortVer = data.ytdlp_version.replace(/^20/, '');
-                elements.ytdlpVersion.innerHTML = `yt-dlp ${shortVer} <span class="update-link" onclick="location.reload()" title="업데이트 확인">🔄update</span>`;
-            }
-        }
-
         console.log('Health check:', data);
     } catch (error) {
         console.error('Health check failed:', error);
     }
 }
 
-/**
- * Detect URL type and call appropriate analyze endpoint
- */
+// ── URL Detection ─────────────────────────────────
 function detectUrlType(url) {
-    // Shorts URL → 개별 동영상으로 처리
-    if (url.includes('/shorts/')) {
-        return 'video';
-    }
-    if (url.includes('playlist?list=') || url.includes('&list=')) {
-        return 'playlist';
-    }
-    if (url.endsWith('/playlists')) {
-        return 'channel_playlists';
-    }
-    // 개별 동영상 URL (watch?v=, youtu.be/, 11자리 ID)
-    if (url.includes('watch?v=') || url.includes('youtu.be/') || /^[\w-]{11}$/.test(url)) {
-        return 'video';
-    }
+    if (url.includes('/shorts/')) return 'video';
+    if (url.includes('playlist?list=') || url.includes('&list=')) return 'playlist';
+    if (url.endsWith('/playlists')) return 'channel_playlists';
+    if (url.includes('watch?v=') || url.includes('youtu.be/') || /^[\w-]{11}$/.test(url)) return 'video';
     return 'channel';
 }
 
-/**
- * Analyze URL (auto-detect channel or playlist)
- */
+// ── Analyze ───────────────────────────────────────
 async function analyzeUrl() {
     const url = elements.channelUrl.value.trim();
-
-    if (!url) {
-        alert('YouTube 채널 또는 재생목록 URL을 입력해주세요.');
-        return;
-    }
-
+    if (!url) return;
     if (isAnalyzing) return;
 
     const urlType = detectUrlType(url);
-
-    // Update UI
     isAnalyzing = true;
+
+    // UI: hide empty, show analyzing
+    elements.emptyState.style.display = 'none';
+    elements.resultsHeader.style.display = 'none';
+    elements.videoList.innerHTML = '';
+    elements.actionFooter.style.display = 'none';
+    elements.analyzingState.style.display = 'flex';
+
     elements.analyzeBtn.disabled = true;
     elements.analyzeBtn.querySelector('.btn-text').style.display = 'none';
-    const loaderEl = elements.analyzeBtn.querySelector('.btn-loader');
-    loaderEl.style.display = 'inline-block';
-    loaderEl.textContent = '분석 중...';
-    elements.resultsSection.style.display = 'none';
-    elements.downloadAllBtn.classList.remove('pop-in');
-    elements.downloadAllBtn.style.display = 'none';
+    elements.analyzeBtn.querySelector('.btn-loader').style.display = 'inline-flex';
 
-    // Show loading toast with rotating messages
+    // Loading toast
     const toast = document.getElementById('loadingToast');
     const toastMsg = document.getElementById('loadingToastMsg');
     let msgIndex = 0;
@@ -419,195 +382,159 @@ async function analyzeUrl() {
     }, 2000);
 
     let endpoint = '/channel/analyze';
-    if (urlType === 'video') {
-        endpoint = '/video/analyze';
-    } else if (urlType === 'playlist') {
-        endpoint = '/playlist/analyze';
-    } else if (urlType === 'channel_playlists') {
-        endpoint = '/channel/playlists/analyze';
-    }
+    if (urlType === 'video') endpoint = '/video/analyze';
+    else if (urlType === 'playlist') endpoint = '/playlist/analyze';
+    else if (urlType === 'channel_playlists') endpoint = '/channel/playlists/analyze';
 
     try {
-        const body = {
-            url: url,
-        };
-
-        // 채널 분석일 때만 include_shorts 전송
-        if (urlType === 'channel') {
-            body.include_shorts = elements.includeShorts.checked;
-        }
+        const body = { url };
+        if (urlType === 'channel') body.include_shorts = elements.includeShorts.checked;
 
         const response = await fetchWithTimeout(`${API_BASE}${endpoint}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-        }, 600000);  // 10분 타임아웃 (yt-dlp 분석은 오래 걸릴 수 있음)
+        }, 600000);
 
         const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.detail || '분석 실패');
-        }
+        if (!response.ok) throw new Error(data.detail || 'Analysis failed');
 
         if (data.success) {
             currentUrlType = urlType;
             displayResults(data);
         } else {
-            throw new Error(data.message || '분석 실패');
+            throw new Error(data.message || 'Analysis failed');
         }
-
     } catch (error) {
         console.error('Error analyzing:', error);
-        alert(`오류: ${error.message}`);
+        alert(`Error: ${error.message}`);
+        elements.emptyState.style.display = 'flex';
     } finally {
         clearInterval(msgInterval);
         toast.style.display = 'none';
+        elements.analyzingState.style.display = 'none';
         isAnalyzing = false;
         elements.analyzeBtn.disabled = false;
-        elements.analyzeBtn.querySelector('.btn-text').style.display = 'inline';
-        loaderEl.style.display = 'none';
+        elements.analyzeBtn.querySelector('.btn-text').style.display = 'inline-flex';
+        elements.analyzeBtn.querySelector('.btn-loader').style.display = 'none';
     }
 }
 
-/**
- * Display analysis results
- */
+// ── Display Results ───────────────────────────────
 function displayResults(data) {
-    // Update stats
     elements.totalVideos.textContent = data.total_videos;
     elements.alreadyDownloaded.textContent = data.already_downloaded;
-    elements.videoCount.textContent = data.videos.length;
 
-    // Store videos and metadata
     currentVideos = data.videos;
     currentChannelName = data.channel_name || '';
     currentPlaylistName = data.playlist_name || '';
 
-    // Display video list
     renderVideoList(data.videos);
 
-    // Show results section
-    elements.resultsSection.style.display = 'block';
+    elements.emptyState.style.display = 'none';
+    elements.resultsHeader.style.display = 'flex';
+    elements.actionFooter.style.display = 'flex';
 
-    // Show download button with pop-in animation and focus
-    elements.downloadAllBtn.classList.remove('pop-in');
-    elements.downloadAllBtn.style.display = '';  // clear inline style so CSS class takes effect
-    void elements.downloadAllBtn.offsetWidth; // force reflow to restart animation
-    elements.downloadAllBtn.classList.add('pop-in');
-    elements.resultsSection.scrollIntoView({ behavior: 'smooth' });
-    setTimeout(() => elements.downloadAllBtn.focus(), 400);
+    elements.resultsHeader.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+        const firstRow = document.getElementById('video-row-0');
+        if (firstRow) firstRow.focus();
+        else elements.downloadAllBtn.focus();
+    }, 400);
 }
 
-/**
- * Render video list
- */
+// ── Render Video List ─────────────────────────────
 function renderVideoList(videos) {
     elements.videoList.innerHTML = '';
     selectedVideos.clear();
 
     if (videos.length === 0) {
-        elements.videoList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">다운로드할 영상이 없습니다.</div>';
+        elements.videoList.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink-faint)">No videos to download.</div>';
         return;
     }
 
     videos.forEach((video, index) => {
         selectedVideos.add(index);
-        const videoItem = document.createElement('div');
-        videoItem.className = 'video-item';
-        videoItem.tabIndex = 0;
-        videoItem.id = `video-row-${index}`;
-        videoItem.innerHTML = `
-            <input type="checkbox" class="video-checkbox" data-index="${index}" checked>
-            <img class="video-thumb" src="https://i.ytimg.com/vi/${video.id}/default.jpg" alt="" loading="lazy">
-            <div class="video-info">
-                <div class="video-title">${index + 1}. ${escapeHtml(video.title)}</div>
+        const row = document.createElement('div');
+        row.className = 'video-item';
+        row.tabIndex = 0;
+        row.id = `video-row-${index}`;
+        row.innerHTML = `
+            <div class="checkbox checked video-cb" data-index="${index}">
+                ${icon('check', 14)}
             </div>
-            <div class="video-status" id="video-status-${index}"></div>
+            <img class="video-thumb" src="https://i.ytimg.com/vi/${video.id}/default.jpg" alt="" loading="lazy">
+            <div class="video-title">${escapeHtml(video.title)}</div>
+            <div class="video-status ytc-meta" id="video-status-${index}"></div>
         `;
-        elements.videoList.appendChild(videoItem);
-    });
-
-    // Bind individual checkbox events
-    document.querySelectorAll('.video-checkbox').forEach(cb => {
-        cb.addEventListener('change', (e) => {
-            const idx = parseInt(e.target.dataset.index);
-            if (e.target.checked) {
-                selectedVideos.add(idx);
-            } else {
-                selectedVideos.delete(idx);
-            }
-            syncSelectAll();
-            updateSelectionCount();
-            const row = e.target.closest('.video-item');
-            if (row) row.focus();
+        row.addEventListener('click', (e) => {
+            if (isDownloading) return;
+            toggleVideoSelection(index);
         });
+        elements.videoList.appendChild(row);
     });
 
-    // Sync select-all checkbox
-    elements.selectAllCheckbox.checked = true;
-    elements.selectAllCheckbox.indeterminate = false;
+    syncSelectAll();
     updateSelectionCount();
 }
 
-/**
- * Sync select-all checkbox state with individual checkboxes
- */
+// ── Toggle Video Selection ────────────────────────
+function toggleVideoSelection(index) {
+    if (selectedVideos.has(index)) {
+        selectedVideos.delete(index);
+    } else {
+        selectedVideos.add(index);
+    }
+
+    const row = document.getElementById(`video-row-${index}`);
+    if (row) {
+        const cb = row.querySelector('.video-cb');
+        cb.classList.toggle('checked', selectedVideos.has(index));
+        row.classList.toggle('unselected', !selectedVideos.has(index));
+    }
+
+    syncSelectAll();
+    updateSelectionCount();
+}
+
+// ── Sync Select All ───────────────────────────────
 function syncSelectAll() {
     const total = currentVideos.length;
     const selected = selectedVideos.size;
-    if (selected === 0) {
-        elements.selectAllCheckbox.checked = false;
-        elements.selectAllCheckbox.indeterminate = false;
-    } else if (selected === total) {
-        elements.selectAllCheckbox.checked = true;
-        elements.selectAllCheckbox.indeterminate = false;
-    } else {
-        elements.selectAllCheckbox.checked = false;
-        elements.selectAllCheckbox.indeterminate = true;
+    const box = elements.selectAllBox;
+
+    box.classList.remove('checked', 'indeterminate');
+    if (selected === total && total > 0) {
+        box.classList.add('checked');
+    } else if (selected > 0) {
+        box.classList.add('indeterminate');
     }
 }
 
-/**
- * Update selection count on button and videoCount span
- */
+// ── Update Selection Count ────────────────────────
 function updateSelectionCount() {
-    const count = selectedVideos.size;
-    elements.videoCount.textContent = count;
-    const btnText = elements.downloadAllBtn.querySelector('.btn-text');
-    btnText.innerHTML = `<svg width="18" height="18" viewBox="0 0 29.978 29.978" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M25.462,19.105v6.848H4.515v-6.848H0.489v8.861c0,1.111,0.9,2.012,2.016,2.012h24.967c1.115,0,2.016-0.9,2.016-2.012v-8.861H25.462z"/><path d="M14.62,18.426l-5.764-6.965c0,0-0.877-0.828,0.074-0.828s3.248,0,3.248,0s0-0.557,0-1.416c0-2.449,0-6.906,0-8.723c0,0-0.129-0.494,0.615-0.494c0.75,0,4.035,0,4.572,0c0.536,0,0.524,0.416,0.524,0.416c0,1.762,0,6.373,0,8.742c0,0.768,0,1.266,0,1.266s1.842,0,2.998,0c1.154,0,0.285,0.867,0.285,0.867s-4.904,6.51-5.588,7.193C15.092,18.979,14.62,18.426,14.62,18.426z"/></svg> (${count})`;
-    elements.downloadAllBtn.disabled = count === 0;
+    elements.selectCount.textContent = `${selectedVideos.size} / ${currentVideos.length}`;
+    elements.downloadAllBtn.disabled = selectedVideos.size === 0;
 }
 
-/**
- * Download all videos
- */
+// ── Download All ──────────────────────────────────
 async function downloadAll() {
-    if (selectedVideos.size === 0) {
-        alert('다운로드할 영상을 선택해주세요.');
-        return;
-    }
-
+    if (selectedVideos.size === 0) return;
     if (isDownloading) return;
 
     isDownloading = true;
     stopRequested = false;
     elements.downloadAllBtn.disabled = true;
-    elements.downloadAllBtn.classList.remove('pop-in');
     elements.analyzeBtn.disabled = true;
 
-    // 체크박스 비활성화
-    document.querySelectorAll('.video-checkbox').forEach(cb => cb.disabled = true);
-    elements.selectAllCheckbox.disabled = true;
+    // Disable interactions on video rows
+    elements.videoList.style.pointerEvents = 'none';
 
-    // Build ordered list of selected indices
     const downloadIndices = [];
     for (let i = 0; i < currentVideos.length; i++) {
         if (selectedVideos.has(i)) downloadIndices.push(i);
     }
 
-    // 이전 '중단됨' 상태 초기화
     downloadIndices.forEach(i => {
         const row = document.getElementById(`video-row-${i}`);
         if (row && row.getAttribute('data-state') === 'stopped') {
@@ -616,35 +543,30 @@ async function downloadAll() {
     });
     const totalSelected = downloadIndices.length;
 
-    // Show mini progress bar + stop button (right next to download button)
     elements.progressWrap.style.display = 'flex';
     elements.stopDownloadBtn.disabled = false;
     elements.stopDownloadBtn.style.opacity = '1';
     elements.progressFill.style.width = '0%';
-    elements.progressText.textContent = `0/${totalSelected}`;
+    elements.progressText.textContent = '0%';
 
-    // Focus stop button so Enter key can stop download
     setTimeout(() => elements.stopDownloadBtn.focus(), 100);
 
-    const quality = elements.quality.value;
+    const quality = currentFormat;
     let completed = 0;
     let skipped = 0;
     let failed = 0;
     let stopped = false;
     let doneCount = 0;
 
-    // 배치 시작 전 취소 플래그 초기화
-    try {
-        await fetch(`${API_BASE}/download/reset-cancel`, { method: 'POST' });
-    } catch (_) {}
+    try { await fetch(`${API_BASE}/download/reset-cancel`, { method: 'POST' }); } catch (_) {}
 
-    // 2-워커 풀: 큐에서 하나씩 꺼내서 병렬 처리
     const queue = [...downloadIndices];
     let queueIndex = 0;
 
     function updateProgress() {
-        elements.progressFill.style.width = `${Math.round((doneCount / totalSelected) * 100)}%`;
-        elements.progressText.textContent = `${doneCount}/${totalSelected}`;
+        const pct = Math.round((doneCount / totalSelected) * 100);
+        elements.progressFill.style.width = `${pct}%`;
+        elements.progressText.textContent = `${pct}%`;
     }
 
     async function worker() {
@@ -655,7 +577,6 @@ async function downloadAll() {
             updateProgress();
             updateVideoRow(i, 'downloading', 'Downloading');
 
-            // video_id별 진행률 폴링
             let dotCount = 0;
             const pollId = setInterval(async () => {
                 try {
@@ -686,7 +607,6 @@ async function downloadAll() {
                 }, 600000);
 
                 clearInterval(pollId);
-                // controller 제거
                 currentDownloadControllers = currentDownloadControllers.filter(c => c !== controller);
                 const data = await response.json();
 
@@ -701,14 +621,13 @@ async function downloadAll() {
                     } else {
                         completed++;
                         const prog = await fetch(`${API_BASE}/download/progress/${video.id}`).then(r => r.json()).catch(() => ({}));
-                        updateVideoRow(i, 'success', prog.total ? `✔ ${prog.total}` : '✔');
+                        updateVideoRow(i, 'success', prog.total ? prog.total : '');
                     }
                     doneCount++;
                     updateProgress();
                 } else {
-                    throw new Error(data.detail || '다운로드 실패');
+                    throw new Error(data.detail || 'Download failed');
                 }
-
             } catch (error) {
                 clearInterval(pollId);
                 if (error.name === 'AbortError' || stopRequested) {
@@ -725,10 +644,8 @@ async function downloadAll() {
         }
     }
 
-    // 2개 워커 동시 실행
     await Promise.all([worker(), worker()]);
 
-    // 중지 시 남은 큐 항목 '중지됨' 표시
     if (stopped || stopRequested) {
         for (let qi = queueIndex; qi < queue.length; qi++) {
             updateVideoRow(queue[qi], 'stopped', 'Stopped');
@@ -736,7 +653,7 @@ async function downloadAll() {
         stopped = true;
     }
 
-    // Summary via modal
+    // Summary
     const parts = [];
     if (completed > 0) parts.push(`Done: ${completed}`);
     if (skipped > 0) parts.push(`Skip: ${skipped}`);
@@ -745,12 +662,13 @@ async function downloadAll() {
     const { displayPath, folderPath } = buildSavePaths();
 
     elements.completeTitle.textContent = stopped ? 'Download Stopped' : 'Download Complete';
-    elements.completeSummary.textContent = parts.join(' · ');
+    elements.completeSummary.textContent = parts.join(' \u00b7 ');
     elements.completePath.textContent = displayPath;
     elements.openFolderBtn.onclick = () => { openDownloadFolder(folderPath); elements.completeModal.style.display = 'none'; };
     elements.completeModal.style.display = 'flex';
-    // new Audio('/resource/PeonJobDone.wav').play().catch(() => {});
     setTimeout(() => elements.openFolderBtn.focus(), 100);
+
+    if (completed > 0) showDoneToast(completed);
 
     isDownloading = false;
     stopRequested = false;
@@ -758,63 +676,80 @@ async function downloadAll() {
     elements.downloadAllBtn.disabled = false;
     elements.analyzeBtn.disabled = false;
     elements.progressWrap.style.display = 'none';
-
-    // 체크박스 다시 활성화
-    document.querySelectorAll('.video-checkbox').forEach(cb => cb.disabled = false);
-    elements.selectAllCheckbox.disabled = false;
+    elements.videoList.style.pointerEvents = '';
 }
 
-/**
- * Update a video row's download status in-place
- */
+// ── Update Video Row ──────────────────────────────
 function updateVideoRow(index, type, statusText) {
     const row = document.getElementById(`video-row-${index}`);
     if (!row) return;
-
     const statusEl = document.getElementById(`video-status-${index}`);
     if (!statusEl) return;
 
-    // Update row state
     row.setAttribute('data-state', type);
     statusEl.className = `video-status video-status-${type}`;
-    statusEl.textContent = statusText;
 
-    // 다운로드 시작·완료 상태에서만 스크롤 (진행률 갱신 중에는 스크롤 안 함)
+    if (type === 'success') {
+        statusEl.innerHTML = icon('check', 16);
+        if (statusText) statusEl.innerHTML += ` <span class="ytc-meta">${statusText}</span>`;
+    } else {
+        statusEl.textContent = statusText;
+    }
+
     if (type !== 'downloading' || statusText === 'Downloading') {
         row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 }
 
-/**
- * Toggle settings panel
- */
-function toggleSettings() {
-    const panel = elements.settingsPanel;
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+// ── Done Toast ────────────────────────────────────
+let doneToastTimer = null;
+function showDoneToast(count) {
+    if (doneToastTimer) clearTimeout(doneToastTimer);
+    elements.doneToast.querySelector('.done-toast-text').textContent = `DONE \u00b7 ${count}`;
+    elements.doneToast.style.display = 'flex';
+    doneToastTimer = setTimeout(() => { elements.doneToast.style.display = 'none'; }, 5000);
 }
 
-/**
- * Check API key status from server
- */
+// ── Settings ──────────────────────────────────────
+function toggleSettings() {
+    const isOpen = elements.settingsPanel.classList.toggle('is-open');
+    elements.settingsBtn.classList.toggle('is-active', isOpen);
+    if (isOpen) {
+        document.addEventListener('mousedown', handleSettingsOutside);
+        document.addEventListener('keydown', handleSettingsEscape);
+    } else {
+        document.removeEventListener('mousedown', handleSettingsOutside);
+        document.removeEventListener('keydown', handleSettingsEscape);
+    }
+}
+function closeSettings() {
+    elements.settingsPanel.classList.remove('is-open');
+    elements.settingsBtn.classList.remove('is-active');
+    document.removeEventListener('mousedown', handleSettingsOutside);
+    document.removeEventListener('keydown', handleSettingsEscape);
+}
+function handleSettingsOutside(e) {
+    if (!elements.settingsPanel.contains(e.target) && e.target !== elements.settingsBtn && !elements.settingsBtn.contains(e.target)) {
+        closeSettings();
+    }
+}
+function handleSettingsEscape(e) {
+    if (e.key === 'Escape') closeSettings();
+}
+
+// ── API Key ───────────────────────────────────────
 async function checkApiKeyStatus() {
     try {
         const response = await fetch(`${API_BASE}/settings`);
         const data = await response.json();
-
         if (data.has_api_key) {
-            elements.apiKeyStatus.textContent = 'API Key OK';
-            elements.apiKeyStatus.className = 'api-key-badge badge-active';
             const savedApiKey = localStorage.getItem('youtube_api_key');
-            if (savedApiKey) {
-                elements.apiKeyInput.value = savedApiKey;
-            }
-            elements.apiKeyInput.placeholder = '•••••••••••••••••••••••••••••••• (설정됨)';
-            elements.apiKeyMessage.textContent = '현재 API 키가 등록되어 있습니다. 변경하려면 새 키를 입력하세요.';
+            if (savedApiKey) elements.apiKeyInput.value = savedApiKey;
+            elements.apiKeyInput.placeholder = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (set)';
+            elements.apiKeyMessage.textContent = 'API key is active.';
             elements.apiKeyMessage.className = 'settings-message success';
         } else {
-            elements.apiKeyStatus.textContent = 'No API Key';
-            elements.apiKeyStatus.className = 'api-key-badge badge-fallback';
-            elements.apiKeyInput.placeholder = 'YouTube Data API v3 키 입력';
+            elements.apiKeyInput.placeholder = 'YouTube Data API v3';
             elements.apiKeyMessage.textContent = '';
         }
     } catch (error) {
@@ -822,29 +757,21 @@ async function checkApiKeyStatus() {
     }
 }
 
-/**
- * Save API key
- */
 async function saveApiKey() {
     const apiKey = elements.apiKeyInput.value.trim();
-
     if (!apiKey) {
-        elements.apiKeyMessage.textContent = 'API 키를 입력해주세요.';
+        elements.apiKeyMessage.textContent = 'Enter an API key.';
         elements.apiKeyMessage.className = 'settings-message error';
         return;
     }
-
     elements.saveApiKeyBtn.disabled = true;
-
     try {
         const response = await fetch(`${API_BASE}/settings/api-key`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ api_key: apiKey }),
         });
-
         const data = await response.json();
-
         if (response.ok && data.success) {
             localStorage.setItem('youtube_api_key', apiKey);
             elements.apiKeyMessage.textContent = data.message;
@@ -852,7 +779,7 @@ async function saveApiKey() {
             elements.apiKeyInput.value = '';
             await checkApiKeyStatus();
         } else {
-            throw new Error(data.detail || data.message || 'API 키 설정 실패');
+            throw new Error(data.detail || data.message || 'Failed');
         }
     } catch (error) {
         elements.apiKeyMessage.textContent = error.message;
@@ -862,21 +789,12 @@ async function saveApiKey() {
     }
 }
 
-/**
- * Delete API key
- */
 async function deleteApiKey() {
-    if (!confirm('저장된 API 키를 삭제하시겠습니까?')) return;
-
+    if (!confirm('Delete saved API key?')) return;
     elements.deleteApiKeyBtn.disabled = true;
-
     try {
-        const response = await fetch(`${API_BASE}/settings/api-key`, {
-            method: 'DELETE',
-        });
-
+        const response = await fetch(`${API_BASE}/settings/api-key`, { method: 'DELETE' });
         const data = await response.json();
-
         if (response.ok && data.success) {
             localStorage.removeItem('youtube_api_key');
             elements.apiKeyInput.value = '';
@@ -884,7 +802,7 @@ async function deleteApiKey() {
             elements.apiKeyMessage.className = 'settings-message success';
             await checkApiKeyStatus();
         } else {
-            throw new Error(data.message || 'API 키 삭제 실패');
+            throw new Error(data.message || 'Failed');
         }
     } catch (error) {
         elements.apiKeyMessage.textContent = error.message;
@@ -894,36 +812,19 @@ async function deleteApiKey() {
     }
 }
 
-/**
- * Build save path display string and folder path for opening
- * Returns { displayPath, folderPath }
- */
+// ── Download Dir ──────────────────────────────────
 function buildSavePaths() {
     const base = currentDownloadDir
         ? currentDownloadDir.replace(/\/$/, '') + '/'
-        : '~/Downloads/YT-Chita/';
-    if (!currentChannelName) {
-        return { displayPath: base, folderPath: base };
-    }
-
+        : '~/Downloads/ytninza/';
+    if (!currentChannelName) return { displayPath: base, folderPath: base };
     if (currentUrlType === 'channel_playlists') {
-        return {
-            displayPath: `${base}${currentChannelName}/ (각 재생목록별 폴더)`,
-            folderPath: `${base}${currentChannelName}/`,
-        };
+        return { displayPath: `${base}${currentChannelName}/`, folderPath: `${base}${currentChannelName}/` };
     }
-
     if (currentPlaylistName) {
-        return {
-            displayPath: `${base}${currentChannelName}/${currentPlaylistName}/`,
-            folderPath: `${base}${currentChannelName}/${currentPlaylistName}/`,
-        };
+        return { displayPath: `${base}${currentChannelName}/${currentPlaylistName}/`, folderPath: `${base}${currentChannelName}/${currentPlaylistName}/` };
     }
-
-    return {
-        displayPath: `${base}${currentChannelName}/All Videos/`,
-        folderPath: `${base}${currentChannelName}/All Videos/`,
-    };
+    return { displayPath: `${base}${currentChannelName}/All Videos/`, folderPath: `${base}${currentChannelName}/All Videos/` };
 }
 
 async function loadDownloadDir() {
@@ -932,13 +833,8 @@ async function loadDownloadDir() {
         const data = await resp.json();
         currentDownloadDir = data.download_dir || '';
         const el = document.getElementById('downloadDirPath');
-        if (el) {
-            el.textContent = currentDownloadDir;
-            el.title = currentDownloadDir;
-        }
-    } catch (e) {
-        console.error('Failed to load download dir:', e);
-    }
+        if (el) { el.textContent = currentDownloadDir; el.title = currentDownloadDir; }
+    } catch (e) { console.error('Failed to load download dir:', e); }
 }
 
 async function browseFolder() {
@@ -948,7 +844,6 @@ async function browseFolder() {
         const resp = await fetch(`${API_BASE}/settings/browse-folder`, { method: 'POST' });
         const data = await resp.json();
         if (!data.success) return;
-
         const saveResp = await fetch(`${API_BASE}/settings/download-dir`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -962,10 +857,7 @@ async function browseFolder() {
             msg.textContent = saveData.message;
             msg.className = 'settings-message success';
         }
-    } catch (e) {
-        msg.textContent = '폴더 선택 실패';
-        msg.className = 'settings-message error';
-    }
+    } catch (e) { msg.textContent = 'Failed'; msg.className = 'settings-message error'; }
 }
 
 async function resetDownloadDir() {
@@ -980,63 +872,36 @@ async function resetDownloadDir() {
             msg.textContent = data.message;
             msg.className = 'settings-message success';
         }
-    } catch (e) {
-        msg.textContent = '초기화 실패';
-        msg.className = 'settings-message error';
-    }
+    } catch (e) { msg.textContent = 'Failed'; msg.className = 'settings-message error'; }
 }
 
-/**
- * Open download folder in system file manager
- */
 async function openDownloadFolder(path) {
     try {
         await fetch(`${API_BASE}/open-folder`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path: path }),
+            body: JSON.stringify({ path }),
         });
-    } catch (e) {
-        console.error('Failed to open folder:', e);
-    }
+    } catch (e) { console.error('Failed to open folder:', e); }
 }
 
-/**
- * Escape HTML to prevent XSS
- */
+// ── Utilities ─────────────────────────────────────
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-/**
- * Fetch with extended timeout (default 10 minutes)
- * Prevents WebKit "Load failed" error for long-running requests
- */
 function fetchWithTimeout(url, options = {}, timeoutMs = 600000) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    // 외부에서 전달된 signal이 있으면 내부 controller와 연동
-    if (options.signal) {
-        options.signal.addEventListener('abort', () => controller.abort());
-    }
-
-    return fetch(url, {
-        ...options,
-        signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
+    if (options.signal) options.signal.addEventListener('abort', () => controller.abort());
+    return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeout));
 }
 
-/**
- * Delay helper
- */
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-// Initialize on load
+// ── Bootstrap ─────────────────────────────────────
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {

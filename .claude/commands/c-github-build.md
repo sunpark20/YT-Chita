@@ -8,9 +8,9 @@
 
 | 플랫폼 | 러너 | 결과물 |
 |--------|------|--------|
-| Mac M-Chip (arm64) | `macos-latest` | `YTChita-Mac-MChip.dmg` |
-| Mac Intel (x86_64) | `macos-15-intel` | `YTChita-Mac-Intel.dmg` |
-| Windows 10/11 64bit | `windows-latest` | `YTChita-Windows10_11-64bit.zip` |
+| Mac M-Chip (arm64) | `macos-latest` | `ytninza-Mac-MChip.dmg` |
+| Mac Intel (x86_64) | `macos-15-intel` | `ytninza-Mac-Intel.dmg` |
+| Windows 10/11 64bit | `windows-latest` | `ytninza-Windows10_11-64bit.zip` |
 
 ## 러너 주의사항
 
@@ -39,7 +39,7 @@
 
 ### 4. 빌드 전 검증
 `python3 -c "import py_compile; ..."` 등으로 주요 파일 구문 오류 확인.
-`git ls-files YT-Chita.spec`으로 spec 파일이 tracked 상태인지도 확인.
+`git ls-files ytninza.spec`으로 spec 파일이 tracked 상태인지도 확인.
 (이 환경에서 `python` 명령은 없고 `python3`만 있음)
 
 ### 5. 커밋 전 체크리스트 (필수)
@@ -81,11 +81,11 @@ git push origin v1.x.x
 | Notarization 실패 | Apple 인증서/비밀번호 만료 | GitHub Secrets 확인 |
 | FFmpeg 다운로드 실패 | 외부 URL 변경 | `build.yml`의 FFmpeg URL 확인 |
 | PyInstaller 에러 | 의존성 변경 | `requirements.txt`, `.spec` 파일 확인 |
-| Spec file not found | `.gitignore`에 `*.spec` 포함 | `.gitignore` 수정 후 `git add YT-Chita.spec` |
+| Spec file not found | `.gitignore`에 `*.spec` 포함 | `.gitignore` 수정 후 `git add ytninza.spec` |
 
 ## 관련 파일
 
 - `.github/workflows/build.yml` — 빌드 워크플로우 (태그 `v*` 푸시로 트리거)
-- `YT-Chita.spec` — PyInstaller 설정
+- `ytninza.spec` — PyInstaller 설정
 - `entitlements.plist` — macOS 코드 서명 권한
 - `src/utils/config.py` — 앱 버전

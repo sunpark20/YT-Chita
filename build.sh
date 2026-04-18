@@ -1,11 +1,11 @@
 #!/bin/bash
-# YT-Chita 빌드 및 코드 서명 스크립트
+# ytninza 빌드 및 코드 서명 스크립트
 set -e
 
 # =============================================================
 # 설정
 # =============================================================
-APP_NAME="YT-Chita"
+APP_NAME="ytninza"
 BUNDLE_ID="com.sunpark.YouTubeDownloader"
 SIGN_IDENTITY="Developer ID Application: sunguk park (GA2LMK5XL2)"
 ENTITLEMENTS="entitlements.plist"
@@ -29,7 +29,7 @@ rm -rf build dist
 echo ""
 echo "[2/5] PyInstaller 빌드 중..."
 source venv/bin/activate
-pyinstaller YT-Chita.spec --clean --noconfirm
+pyinstaller ytninza.spec --clean --noconfirm
 echo "✅ 빌드 완료"
 
 # =============================================================
@@ -102,15 +102,15 @@ fi
 rm -f "${DMG_PATH}"
 
 create-dmg \
-    --volname "YT-Chita" \
+    --volname "ytninza" \
     --volicon "resource/icon.icns" \
     --background "resource/dmg-background.png" \
     --window-pos 200 120 \
     --window-size 660 400 \
     --icon-size 80 \
-    --icon "YT-Chita.app" 180 190 \
+    --icon "ytninza.app" 180 190 \
     --app-drop-link 480 190 \
-    --hide-extension "YT-Chita.app" \
+    --hide-extension "ytninza.app" \
     --no-internet-enable \
     "${DMG_PATH}" \
     "${APP_PATH}"

@@ -14,15 +14,15 @@ from datetime import datetime
 def _get_log_dir() -> Path:
     """Return platform-appropriate log directory."""
     if platform.system() == "Darwin":
-        log_dir = Path.home() / "Library" / "Logs" / "YT-Chita"
+        log_dir = Path.home() / "Library" / "Logs" / "ytninza"
     elif platform.system() == "Windows":
         import os
         appdata = os.environ.get("APPDATA", "")
         if not appdata or not Path(appdata).exists():
             appdata = str(Path.home())
-        log_dir = Path(appdata) / "YT-Chita" / "Logs"
+        log_dir = Path(appdata) / "ytninza" / "Logs"
     else:
-        log_dir = Path.home() / ".local" / "share" / "YT-Chita" / "logs"
+        log_dir = Path.home() / ".local" / "share" / "ytninza" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 

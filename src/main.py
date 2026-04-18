@@ -36,9 +36,9 @@ def _fatal_error(message: str):
             appdata = os.environ.get("APPDATA", "")
             if not appdata or not Path(appdata).exists():
                 appdata = str(Path.home())
-            log_dir = os.path.join(appdata, "YT-Chita", "Logs")
+            log_dir = os.path.join(appdata, "ytninza", "Logs")
             ctypes.windll.user32.MessageBoxW(
-                0, f"{message}\n\nLog: {log_dir}", "YT Chita - Error", 0x10
+                0, f"{message}\n\nLog: {log_dir}", "ytninza - Error", 0x10
             )
         except Exception:
             pass
@@ -48,7 +48,7 @@ def _fatal_error(message: str):
 def _check_single_instance():
     """이미 실행 중인 인스턴스가 있으면 종료"""
 
-    # 1) Health endpoint 체크 — YT-Chita가 실제로 떠 있는지 확인
+    # 1) Health endpoint 체크 — ytninza가 실제로 떠 있는지 확인
     #    (단순 TCP 체크는 다른 앱이 포트를 쓸 때 오판함)
     try:
         resp = urllib.request.urlopen(
@@ -299,7 +299,7 @@ def main():
         resizable=True,
         frameless=False,
         easy_drag=False,
-        background_color='#FFFFFF',
+        background_color='#2B2C30',
         text_select=True,
     )
 

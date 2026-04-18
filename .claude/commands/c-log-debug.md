@@ -10,9 +10,9 @@
 
 | 플랫폼 | 경로 |
 |--------|------|
-| macOS | `~/Library/Logs/YT-Chita/app_YYYYMMDD.log` |
-| Windows | `%APPDATA%/YT-Chita/Logs/app_YYYYMMDD.log` |
-| Linux | `~/.local/share/YT-Chita/logs/app_YYYYMMDD.log` |
+| macOS | `~/Library/Logs/ytninza/app_YYYYMMDD.log` |
+| Windows | `%APPDATA%/ytninza/Logs/app_YYYYMMDD.log` |
+| Linux | `~/.local/share/ytninza/logs/app_YYYYMMDD.log` |
 
 Windows 로그는 사용자가 프로젝트 루트에 직접 올리는 경우도 있음 → `app_YYYYMMDD.log` 패턴으로 Glob 검색할 것.
 

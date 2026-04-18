@@ -15,7 +15,7 @@ So downloads are saved as `260311_VideoTitle` to keep them sorted by upload date
 
 ## Download
 
-https://github.com/sunpark20/YT-Chita/releases
+https://github.com/sunpark20/ytninza/releases
 
 | Platform | File |
 |----------|------|

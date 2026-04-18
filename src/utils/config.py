@@ -28,8 +28,8 @@ class Config:
     """Application configuration"""
 
     # Application
-    APP_NAME = "YT Chita"
-    APP_VERSION = "1.3.0"
+    APP_NAME = "ytninza"
+    APP_VERSION = "1.4.0"
 
     # Server
     HOST = "127.0.0.1"
@@ -41,7 +41,7 @@ class Config:
     # Paths
     BASE_DIR = get_base_path()
     FRONTEND_DIR = BASE_DIR / "src" / "frontend"
-    DEFAULT_DOWNLOADS_DIR = Path.home() / "Downloads" / "YT-Chita"
+    DEFAULT_DOWNLOADS_DIR = Path.home() / "Downloads" / "ytninza"
     DOWNLOADS_DIR = DEFAULT_DOWNLOADS_DIR
 
     # Download settings

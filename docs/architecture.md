@@ -1,4 +1,4 @@
-# YT-Chita Architecture
+# ytninza Architecture
 
 ## 전체 시스템 구조
 
@@ -43,7 +43,7 @@ graph TB
     end
 
     subgraph Storage["파일 시스템"]
-        DOWNLOADS["~/Downloads/YT-Chita/<br/>Channel/Playlist/"]
+        DOWNLOADS["~/Downloads/ytninza/<br/>Channel/Playlist/"]
         ARCHIVEFILE[.download_archive]
         LOGS[로그 파일]
     end
@@ -132,7 +132,7 @@ flowchart TD
 ## 디렉토리 구조
 
 ```
-YT-Chita/
+ytninza/
 ├── src/
 │   ├── main.py                  # 앱 진입점 (pywebview + FastAPI)
 │   ├── api/
@@ -158,7 +158,7 @@ YT-Chita/
 │       └── js/app.js            # 프론트엔드 로직
 ├── resource/                    # 정적 에셋 (사운드, 이미지)
 ├── .github/workflows/           # GitHub Actions CI/CD
-└── YT-Chita.spec               # PyInstaller 빌드 설정
+└── ytninza.spec               # PyInstaller 빌드 설정
 ```
 
 ## 핵심 설계 결정

@@ -30,11 +30,11 @@ def _get_app_data_dir() -> Path:
         appdata = os.environ.get("APPDATA", "")
         if not appdata or not Path(appdata).exists():
             appdata = str(Path.home())
-        return Path(appdata) / "YT-Chita"
+        return Path(appdata) / "ytninza"
     elif platform.system() == "Darwin":
-        return Path.home() / "Library" / "Application Support" / "YT-Chita"
+        return Path.home() / "Library" / "Application Support" / "ytninza"
     else:
-        return Path.home() / ".local" / "share" / "YT-Chita"
+        return Path.home() / ".local" / "share" / "ytninza"
 
 
 def _version_tuple(version_str: str) -> tuple:
@@ -79,7 +79,7 @@ class YtdlpUpdater:
         try:
             req = urllib.request.Request(
                 PYPI_URL,
-                headers={"Accept": "application/json", "User-Agent": "YT-Chita"},
+                headers={"Accept": "application/json", "User-Agent": "ytninza"},
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read())
