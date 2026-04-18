@@ -41,7 +41,8 @@ class Config:
     # Paths
     BASE_DIR = get_base_path()
     FRONTEND_DIR = BASE_DIR / "src" / "frontend"
-    DOWNLOADS_DIR = Path.home() / "Downloads" / "YT-Chita"
+    DEFAULT_DOWNLOADS_DIR = Path.home() / "Downloads" / "YT-Chita"
+    DOWNLOADS_DIR = DEFAULT_DOWNLOADS_DIR
 
     # Download settings
     DEFAULT_QUALITY = "720p"
@@ -81,8 +82,31 @@ class Config:
         return path
 
 
+    @classmethod
+    def set_downloads_dir(cls, path: str):
+        cls.DOWNLOADS_DIR = Path(path)
+        cls.ensure_directories()
+
+    @classmethod
+    def reset_downloads_dir(cls):
+        cls.DOWNLOADS_DIR = cls.DEFAULT_DOWNLOADS_DIR
+        cls.ensure_directories()
+
+
 # Initialize directories on import
 Config.ensure_directories()
+
+# Load saved download directory
+def _load_saved_downloads_dir():
+    from utils.key_manager import load_download_dir
+    saved = load_download_dir()
+    if saved:
+        p = Path(saved)
+        if p.exists() or p.parent.exists():
+            Config.DOWNLOADS_DIR = p
+            Config.ensure_directories()
+
+_load_saved_downloads_dir()
 
 
 if __name__ == "__main__":

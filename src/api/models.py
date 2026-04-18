@@ -120,6 +120,11 @@ class APIKeyRequest(BaseModel):
     api_key: str = Field(..., description="YouTube Data API v3 key")
 
 
+class DownloadDirRequest(BaseModel):
+    """Request to set download directory"""
+    download_dir: str = Field(..., description="Download directory path")
+
+
 class APIKeyResponse(BaseModel):
     """Response for API key operations"""
     success: bool

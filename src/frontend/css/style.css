@@ -281,6 +281,52 @@ body {
     color: #FF3B30;
 }
 
+.download-dir-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.download-dir-path {
+    flex: 1;
+    padding: 8px 12px;
+    background: #F2F2F7;
+    border: 1px solid #E5E5EA;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: rtl;
+    text-align: left;
+}
+
+.btn-icon {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #C6C6C8;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.btn-icon:hover {
+    background: #F2F2F7;
+}
+
+.btn-icon-muted {
+    color: #8E8E93;
+    font-size: 1.2rem;
+}
+
 /* Label Row (label + help button) */
 .label-row {
     display: flex;

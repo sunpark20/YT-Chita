@@ -16,7 +16,7 @@ from .models import (
     PlaylistAnalyzeRequest, PlaylistAnalyzeResponse,
     DownloadExtractRequest, DownloadExtractResponse,
     HealthResponse, UpdateResponse, ErrorResponse,
-    APIKeyRequest, APIKeyResponse,
+    APIKeyRequest, APIKeyResponse, DownloadDirRequest,
     VideoInfo, PlaylistInfo
 )
 from services.youtube_api import YouTubeAPIService
@@ -25,7 +25,10 @@ from services.duplicate_filter import DuplicateFilter
 from services.updater import YtdlpUpdater
 from utils.config import Config
 from utils.validators import is_valid_youtube_url, normalize_input, extract_video_id, extract_playlist_id
-from utils.key_manager import load_api_key_from_file, save_api_key_to_file, delete_api_key_from_file
+from utils.key_manager import (
+    load_api_key_from_file, save_api_key_to_file, delete_api_key_from_file,
+    save_download_dir, load_download_dir, delete_download_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +106,99 @@ async def delete_api_key():
         has_api_key=False,
         message="API 키가 삭제되어 yt-dlp 모드로 전환되었습니다."
     )
+
+
+@router.get("/settings/download-dir")
+async def get_download_dir():
+    return {
+        "success": True,
+        "download_dir": str(Config.DOWNLOADS_DIR),
+        "is_default": Config.DOWNLOADS_DIR == Config.DEFAULT_DOWNLOADS_DIR,
+    }
+
+
+@router.post("/settings/download-dir")
+async def set_download_dir(request: DownloadDirRequest):
+    path = request.download_dir.strip()
+    if not path:
+        raise HTTPException(status_code=400, detail="경로가 비어있습니다.")
+
+    from pathlib import Path as P
+    p = P(path)
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"폴더를 생성할 수 없습니다: {e}")
+
+    Config.set_downloads_dir(path)
+    save_download_dir(path)
+    logger.info(f"Download directory changed to: {path}")
+    return {
+        "success": True,
+        "download_dir": str(Config.DOWNLOADS_DIR),
+        "message": "다운로드 폴더가 변경되었습니다.",
+    }
+
+
+@router.delete("/settings/download-dir")
+async def reset_download_dir():
+    Config.reset_downloads_dir()
+    delete_download_dir()
+    logger.info(f"Download directory reset to default: {Config.DOWNLOADS_DIR}")
+    return {
+        "success": True,
+        "download_dir": str(Config.DOWNLOADS_DIR),
+        "message": "기본 다운로드 폴더로 초기화되었습니다.",
+    }
+
+
+@router.post("/settings/browse-folder")
+async def browse_folder():
+    import subprocess
+    import platform
+
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            result = subprocess.run(
+                ["osascript", "-e",
+                 'POSIX path of (choose folder with prompt "다운로드 폴더 선택")'],
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0:
+                return {"success": True, "path": result.stdout.strip().rstrip("/")}
+            return {"success": False, "message": "cancelled"}
+
+        elif system == "Windows":
+            ps_script = (
+                "Add-Type -AssemblyName System.Windows.Forms;"
+                "$d = New-Object System.Windows.Forms.FolderBrowserDialog;"
+                "$d.Description = '다운로드 폴더 선택';"
+                "$d.ShowNewFolderButton = $true;"
+                "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }"
+            )
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_script],
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return {"success": True, "path": result.stdout.strip()}
+            return {"success": False, "message": "cancelled"}
+
+        else:
+            result = subprocess.run(
+                ["zenity", "--file-selection", "--directory",
+                 "--title=다운로드 폴더 선택"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0:
+                return {"success": True, "path": result.stdout.strip()}
+            return {"success": False, "message": "cancelled"}
+
+    except subprocess.TimeoutExpired:
+        return {"success": False, "message": "시간 초과"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/health", response_model=HealthResponse)

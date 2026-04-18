@@ -61,6 +61,7 @@ let isDownloading = false;
 let stopRequested = false;
 let currentDownloadControllers = [];  // 2개 동시 abort 지원
 let selectedVideos = new Set();
+let currentDownloadDir = '';
 
 // DOM Elements
 const elements = {
@@ -136,6 +137,7 @@ async function init() {
     // Check health and settings
     await checkHealth();
     await checkApiKeyStatus();
+    await loadDownloadDir();
 
     // Setup event listeners
     elements.analyzeBtn.addEventListener('click', analyzeUrl);
@@ -241,6 +243,8 @@ async function init() {
             alert('로그 폴더를 열 수 없습니다.');
         }
     });
+    document.getElementById('browseFolderBtn')?.addEventListener('click', browseFolder);
+    document.getElementById('resetFolderBtn')?.addEventListener('click', resetDownloadDir);
     elements.helpBtn.addEventListener('click', () => elements.helpModal.style.display = 'flex');
     elements.helpCloseBtn.addEventListener('click', () => elements.helpModal.style.display = 'none');
     elements.helpModal.addEventListener('click', (e) => {
@@ -895,13 +899,14 @@ async function deleteApiKey() {
  * Returns { displayPath, folderPath }
  */
 function buildSavePaths() {
-    const base = '~/Downloads/YT-Chita/';
+    const base = currentDownloadDir
+        ? currentDownloadDir.replace(/\/$/, '') + '/'
+        : '~/Downloads/YT-Chita/';
     if (!currentChannelName) {
         return { displayPath: base, folderPath: base };
     }
 
     if (currentUrlType === 'channel_playlists') {
-        // 채널/playlists: 각 재생목록별 폴더에 저장됨
         return {
             displayPath: `${base}${currentChannelName}/ (각 재생목록별 폴더)`,
             folderPath: `${base}${currentChannelName}/`,
@@ -909,18 +914,76 @@ function buildSavePaths() {
     }
 
     if (currentPlaylistName) {
-        // 단일 재생목록
         return {
             displayPath: `${base}${currentChannelName}/${currentPlaylistName}/`,
             folderPath: `${base}${currentChannelName}/${currentPlaylistName}/`,
         };
     }
 
-    // 개별 동영상 또는 @채널 → All Videos
     return {
         displayPath: `${base}${currentChannelName}/All Videos/`,
         folderPath: `${base}${currentChannelName}/All Videos/`,
     };
+}
+
+async function loadDownloadDir() {
+    try {
+        const resp = await fetch(`${API_BASE}/settings/download-dir`);
+        const data = await resp.json();
+        currentDownloadDir = data.download_dir || '';
+        const el = document.getElementById('downloadDirPath');
+        if (el) {
+            el.textContent = currentDownloadDir;
+            el.title = currentDownloadDir;
+        }
+    } catch (e) {
+        console.error('Failed to load download dir:', e);
+    }
+}
+
+async function browseFolder() {
+    const msg = document.getElementById('downloadDirMessage');
+    msg.textContent = '';
+    try {
+        const resp = await fetch(`${API_BASE}/settings/browse-folder`, { method: 'POST' });
+        const data = await resp.json();
+        if (!data.success) return;
+
+        const saveResp = await fetch(`${API_BASE}/settings/download-dir`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ download_dir: data.path }),
+        });
+        const saveData = await saveResp.json();
+        if (saveData.success) {
+            currentDownloadDir = saveData.download_dir;
+            document.getElementById('downloadDirPath').textContent = currentDownloadDir;
+            document.getElementById('downloadDirPath').title = currentDownloadDir;
+            msg.textContent = saveData.message;
+            msg.className = 'settings-message success';
+        }
+    } catch (e) {
+        msg.textContent = '폴더 선택 실패';
+        msg.className = 'settings-message error';
+    }
+}
+
+async function resetDownloadDir() {
+    const msg = document.getElementById('downloadDirMessage');
+    try {
+        const resp = await fetch(`${API_BASE}/settings/download-dir`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.success) {
+            currentDownloadDir = data.download_dir;
+            document.getElementById('downloadDirPath').textContent = currentDownloadDir;
+            document.getElementById('downloadDirPath').title = currentDownloadDir;
+            msg.textContent = data.message;
+            msg.className = 'settings-message success';
+        }
+    } catch (e) {
+        msg.textContent = '초기화 실패';
+        msg.className = 'settings-message error';
+    }
 }
 
 /**
