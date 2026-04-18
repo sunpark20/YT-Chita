@@ -1,1 +1,1 @@
-# Project Instructions
+@docs/architecture.md

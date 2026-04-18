@@ -4,40 +4,45 @@ Gmail에서 CrashReport 이메일을 읽고 분석 보고해줘.
 
 ---
 
-## 상태 파일
-
-마지막으로 읽은 날짜를 아래 파일에 저장하여, 다음 실행 시 그 이후 리포트만 읽는다.
-
-- **경로**: `/Users/sunguk/.claude/projects/-Users-sunguk-0-code-YT-Chita/memory/crashreport_last_read.md`
-- **형식**: ISO 8601 날짜 한 줄 (예: `2026-03-14T04:15:14.000Z`)
-
 ## 수행할 작업
 
-### 1. 상태 파일 확인
+### 1. 미읽은 리포트 검색
 
-Read 도구로 상태 파일을 읽는다.
-- 파일이 있으면 → 저장된 날짜를 `dateFrom`으로 사용
-- 파일이 없거나 비어있으면 → 첫 실행. `dateFrom` 없이 전체 조회
-
-### 2. 이메일 조회
-
-`mcp__email-reader__get-messages` 도구를 호출한다:
+`mcp__gmail__search_emails` 도구를 호출한다:
 ```
 subject: "crashreport"
-includeFullContent: true
-limit: 50
-dateFrom: (상태 파일의 날짜, 첫 실행이면 생략)
+unread: true
+limit: 100
 ```
 
-### 3. 이메일 본문 디코딩
+- `unread: true`로 이미 처리된(읽음 표시된) 리포트를 자동 스킵
+- 결과가 0건이면 → "새로운 크래시 리포트가 없습니다." 출력 후 **즉시 종료**
 
-이메일 본문은 quoted-printable 인코딩되어 있을 수 있다.
-- `=3D` → `=`, `=\n` → (줄 이음), `=E2=9C=85` → `✅` 등
-- Bash에서 Python `quopri` 모듈로 디코딩하거나, 직접 패턴 치환
+### 2. 제목 기준 그룹핑
 
-### 4. 리포트 분석 및 그룹핑
+검색 결과의 **제목(subject)**이 동일한 메시지끼리 그룹핑한다.
 
-각 크래시 리포트에서 아래 정보를 추출하여 그룹핑:
+예시:
+```
+[CrashReport] 1.2.8 - RuntimeError    → 15건
+[CrashReport] 1.3.0 - PermissionError → 3건
+[CrashReport] 1.2.8 - FileNotFoundError → 1건
+```
+
+> **핵심**: `get_email`은 **그룹당 대표 1건만** 호출한다. 동일 제목의 나머지 메시지는 본문을 읽지 않는다.
+
+### 3. 대표 메시지 본문 읽기
+
+각 그룹의 첫 번째 메시지에 대해 `mcp__gmail__get_email` 도구를 호출한다:
+```
+messageId: (그룹 첫 번째 메시지의 ID)
+```
+
+> MCP 서버가 `mailparser`의 `simpleParser`를 사용하여 이메일 본문을 자동 디코딩한다. quoted-printable 수동 디코딩은 불필요.
+
+### 4. 리포트 분석
+
+각 크래시 리포트에서 아래 정보를 추출:
 
 | 추출 항목 | 찾는 방법 |
 |-----------|-----------|
@@ -45,6 +50,7 @@ dateFrom: (상태 파일의 날짜, 첫 실행이면 생략)
 | **버전** | 이메일 제목 `[CrashReport] X.Y.Z - ErrorType` 에서 추출 |
 | **사용자** | 본문의 Windows 경로 `C:\Users\{username}\...` 에서 추출 |
 | **플랫폼** | 로그의 `Platform:` 라인에서 추출 |
+| **OS 빌드** | 로그의 OS 버전 정보에서 추출 (예: Windows 10 22H2, Windows 11 23H2) |
 
 ### 5. 보고서 출력
 
@@ -54,7 +60,7 @@ dateFrom: (상태 파일의 날짜, 첫 실행이면 생략)
 ## CrashReport 분석 보고서
 
 ### 기본 현황
-- 총 리포트: N건
+- 총 리포트: N건 (고유 에러 N종)
 - 기간: YYYY-MM-DD ~ YYYY-MM-DD
 - 버전: ...
 - 플랫폼: ...
@@ -63,7 +69,14 @@ dateFrom: (상태 파일의 날짜, 첫 실행이면 생략)
 ### 에러 유형별 분류
 | 에러 | 건수 | 영향 버전 | 영향 사용자 |
 |------|------|-----------|-------------|
-| ... | ... | ... | ... |
+| RuntimeError × 15건 | 15 | 1.2.8 | user1, user2 |
+| PermissionError × 3건 | 3 | 1.3.0 | user3 |
+
+### OS 빌드별 분류
+| OS 빌드 | 건수 | 주요 에러 |
+|----------|------|-----------|
+| Windows 10 22H2 | 10 | RuntimeError |
+| Windows 11 23H2 | 8 | PermissionError |
 
 ### 사용자별 현황
 | 사용자 | 리포트 수 | 주요 에러 | 버전 |
@@ -75,16 +88,22 @@ dateFrom: (상태 파일의 날짜, 첫 실행이면 생략)
 - (ffmpeg 누락, mutex 충돌 등)
 ```
 
-새 리포트가 0건이면: "새로운 크래시 리포트가 없습니다." 로 간단히 보고.
+### 6. 읽음 표시
 
-### 6. 상태 파일 갱신
+분석 완료된 **모든** 메시지(그룹 대표뿐 아니라 전체)에 읽음 표시:
+`mcp__gmail__mark_as_read` 도구를 호출한다:
+```
+messageId: (처리된 메시지 ID)
+read: true
+```
 
-조회한 리포트 중 가장 최신 날짜를 상태 파일에 저장한다.
-- Write 도구로 `/Users/sunguk/.claude/projects/-Users-sunguk-0-code-YT-Chita/memory/crashreport_last_read.md` 에 날짜 한 줄만 기록
-- 리포트가 0건이면 상태 파일을 갱신하지 않는다
+> 모든 메시지를 읽음 처리해야 다음 실행 시 중복 조회되지 않는다.
+
+## 에러 핸들링
+
+- MCP 연결 실패 시: "Gmail MCP 서버에 연결할 수 없습니다. MCP 서버 설정을 확인해주세요." 라고 안내하고 중단
 
 ## 주의사항
 
-- 결과가 너무 클 경우 파일로 저장된다 → Bash에서 Python/jq로 파싱할 것
 - 대량 리포트는 Python 스크립트로 일괄 분석하는 것이 효율적
 - 코드 수정은 하지 않는다. 분석 및 보고만 수행

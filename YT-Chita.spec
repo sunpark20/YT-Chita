@@ -2,6 +2,12 @@
 import os
 import sys
 import platform
+import re
+
+# config.py에서 APP_VERSION 동적 읽기
+with open('src/utils/config.py') as f:
+    _m = re.search(r'APP_VERSION\s*=\s*["\'](.+?)["\']', f.read())
+    app_version = _m.group(1) if _m else '0.0.0'
 
 # 운영체제 판별
 is_windows = sys.platform.startswith('win')
@@ -111,12 +117,12 @@ if is_macos:
         name='YT-Chita.app',
         icon=icon_file,
         bundle_identifier='com.sunpark.YouTubeDownloader',
-        version='1.2.2',
+        version=app_version,
         info_plist={
             'CFBundleDisplayName': 'YT Chita',
             'CFBundleName': 'YT Chita',
-            'CFBundleShortVersionString': '1.2.2',
-            'CFBundleVersion': '1.2.2',
+            'CFBundleShortVersionString': app_version,
+            'CFBundleVersion': app_version,
             'NSHighResolutionCapable': True,
             'LSMinimumSystemVersion': '10.15',
             'NSAppTransportSecurity': {

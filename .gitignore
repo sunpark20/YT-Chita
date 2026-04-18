@@ -34,3 +34,4 @@ downloads/
 *.app
 *.dmg
 *.zip
+.mcp.json

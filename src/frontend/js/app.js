@@ -267,11 +267,11 @@ async function init() {
     const appIcon = document.getElementById('appIcon');
     appIcon.addEventListener('click', () => {
         appIcon.classList.add('animating');
-        const boilAudio = new Audio('/resource/BoilingPod.mp3');
-        boilAudio.play().catch(() => {});
+        // const boilAudio = new Audio('/resource/BoilingPod.mp3');
+        // boilAudio.play().catch(() => {});
         setTimeout(() => {
             appIcon.classList.remove('animating');
-            boilAudio.pause();
+            // boilAudio.pause();
         }, 4000);
     });
 
@@ -299,39 +299,26 @@ async function init() {
     boombox.addEventListener('click', () => {
         if (!boomboxAudio) {
             // First click — initialise audio pipeline
-            boomboxAudio = new Audio('/resource/WhatYouGonnaBe.mp3');
-            boomboxCtx = new (window.AudioContext || window.webkitAudioContext)();
-            boomboxAnalyser = boomboxCtx.createAnalyser();
-            boomboxAnalyser.fftSize = 256;
-            boomboxFreqData = new Uint8Array(boomboxAnalyser.frequencyBinCount);
-            const source = boomboxCtx.createMediaElementSource(boomboxAudio);
-            source.connect(boomboxAnalyser);
-            boomboxAnalyser.connect(boomboxCtx.destination);
-
-            boomboxAudio.onended = () => {
-                boomboxPlaying = false;
-                boombox.classList.remove('shaking');
-                boombox.style.transform = '';
-            };
-
-            boomboxAudio.play().catch(() => {});
+            // boomboxAudio = new Audio('/resource/WhatYouGonnaBe.mp3');
+            // ... (Audio initialization commented out)
+            // boomboxAudio.play().catch(() => {});
             boomboxPlaying = true;
             boombox.classList.add('shaking');
-            boomboxBeatLoop();
+            // boomboxBeatLoop();
         } else if (boomboxPlaying) {
             // Pause
-            boomboxAudio.pause();
+            // boomboxAudio.pause();
             boomboxPlaying = false;
             boombox.classList.remove('shaking');
             boombox.style.transform = '';
             if (boomboxAnimId) cancelAnimationFrame(boomboxAnimId);
         } else {
             // Resume
-            boomboxCtx.resume();
-            boomboxAudio.play().catch(() => {});
+            // boomboxCtx.resume();
+            // boomboxAudio.play().catch(() => {});
             boomboxPlaying = true;
             boombox.classList.add('shaking');
-            boomboxBeatLoop();
+            // boomboxBeatLoop();
         }
     });
 
@@ -758,7 +745,7 @@ async function downloadAll() {
     elements.completePath.textContent = displayPath;
     elements.openFolderBtn.onclick = () => { openDownloadFolder(folderPath); elements.completeModal.style.display = 'none'; };
     elements.completeModal.style.display = 'flex';
-    new Audio('/resource/PeonJobDone.wav').play().catch(() => {});
+    // new Audio('/resource/PeonJobDone.wav').play().catch(() => {});
     setTimeout(() => elements.openFolderBtn.focus(), 100);
 
     isDownloading = false;

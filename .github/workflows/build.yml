@@ -155,12 +155,19 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
 
+      - name: Rename artifacts with version
+        run: |
+          VERSION=${{ github.ref_name }}
+          mv YTChita-Mac-Intel/YTChita-Mac-Intel.dmg "YTChita-Mac-Intel/YTChita-Mac-Intel-${VERSION}.dmg"
+          mv YTChita-Mac-MChip/YTChita-Mac-MChip.dmg "YTChita-Mac-MChip/YTChita-Mac-MChip-${VERSION}.dmg"
+          mv YTChita-Windows10_11-64bit/YTChita-Windows10_11-64bit.zip "YTChita-Windows10_11-64bit/YTChita-Windows10_11-64bit-${VERSION}.zip"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           body: |
-            ## v1.3.0
+            ## ${{ github.ref_name }}
 
             ### 개선
             - 최대 영상 수 2000 → 5000으로 확대
@@ -168,8 +175,8 @@ jobs:
             - 크래시 후 재시작 시 mutex 잔류 방지 (atexit 해제)
             - ffmpeg 번들 누락 시 안내 메시지 개선
           files: |
-            YTChita-Mac-Intel/YTChita-Mac-Intel.dmg
-            YTChita-Mac-MChip/YTChita-Mac-MChip.dmg
-            YTChita-Windows10_11-64bit/YTChita-Windows10_11-64bit.zip
+            YTChita-Mac-Intel/YTChita-Mac-Intel-${{ github.ref_name }}.dmg
+            YTChita-Mac-MChip/YTChita-Mac-MChip-${{ github.ref_name }}.dmg
+            YTChita-Windows10_11-64bit/YTChita-Windows10_11-64bit-${{ github.ref_name }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
