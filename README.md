@@ -18,7 +18,7 @@
 
 ## 다운로드 및 업데이트 현황
 
-https://github.com/sunpark20/ytninza/releases
+https://github.com/sunpark20/YT-Chita/releases
 
 
 ## 오류 신고

@@ -11,6 +11,6 @@
 여행유튜브 동영상이 아주 많기 때문에 순서대로 보기 쉽지 않아요.
 그래서 다운받아지면 `260311_영상제목` 같이 정렬되게 만들었어요.
 
-다운로드 및 업데이트 현황 https://github.com/sunpark20/ytninza/releases
+다운로드 및 업데이트 현황 https://github.com/sunpark20/YT-Chita/releases
 
-오류 신고 및 상세 설명은 https://github.com/sunpark20/ytninza 를 확인해주세요.
+오류 신고 및 상세 설명은 https://github.com/sunpark20/YT-Chita 를 확인해주세요.
