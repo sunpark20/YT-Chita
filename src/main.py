@@ -181,7 +181,7 @@ def start_fastapi_server(port: int):
             port=port,
             log_level="error",
             access_log=False,
-            log_config={"version": 1, "disable_existing_loggers": False, "handlers": {}, "loggers": {}},
+            log_config=None,
         )
 
         server = uvicorn.Server(config)
@@ -316,8 +316,10 @@ def main():
     except KeyboardInterrupt:
         logger.info("Application interrupted by user")
     except Exception as e:
-        logger.error(f"Application error: {e}")
-        raise
+        error_msg = str(e)
+        logger.error(f"Application error: {error_msg}")
+        send_crash_report(type(e), e, e.__traceback__)
+        _fatal_error(f"Application error: {error_msg}")
     finally:
         logger.info("Application shut down")
         import os

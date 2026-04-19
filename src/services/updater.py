@@ -234,6 +234,9 @@ class YtdlpUpdater:
     # ── Public API ────────────────────────────────────────────
 
     def get_current_version(self) -> Optional[str]:
+        if self.current_version is not None:
+            return self.current_version
+
         if getattr(sys, "frozen", False):
             update_ver = self._get_installed_update_version()
             if update_ver and str(self._get_update_dir()) in sys.path:
@@ -257,7 +260,7 @@ class YtdlpUpdater:
             if result.returncode == 0:
                 version = result.stdout.strip()
                 self.current_version = version
-                logger.info(f"Current yt-dlp version: {version}")
+                logger.debug(f"Current yt-dlp version: {version}")
                 return version
             else:
                 logger.warning("yt-dlp not found or error getting version")
@@ -283,6 +286,7 @@ class YtdlpUpdater:
             )
 
             if result.returncode == 0:
+                self.current_version = None
                 new_version = self.get_current_version()
                 if new_version:
                     self.latest_version = new_version

@@ -516,6 +516,17 @@ body {
 .help-section { margin-bottom: var(--s-3); }
 .help-divider { height: 1px; background: var(--divider); margin: var(--s-3) 0; }
 .help-img-wrap img { width: 100%; border-radius: var(--r-sm); }
+.help-homepage { text-align: center; }
+.help-homepage a {
+    color: var(--ink-faint);
+    font-size: 12px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: color .15s;
+}
+.help-homepage a:hover { color: var(--ink-normal); }
 
 /* ── Complete Modal ────────────────────────────── */
 .complete-modal {
