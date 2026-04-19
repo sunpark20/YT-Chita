@@ -169,9 +169,13 @@ jobs:
           body: |
             ## ${{ github.ref_name }}
 
-            ### 변경
-            - 앱 이름 YT-Chita → ytninza로 변경
-            - UI 확대/축소 기능 추가 (Shift+/Shift- 또는 버튼)
+            ### 수정
+            - 특정 Windows 환경에서 서버 시작 시 크래시 수정 (uvicorn log_config)
+            - 앱 크래시 시 리포트 누락 및 에러 다이얼로그 미표시 수정
+            - yt-dlp 버전 체크 반복 호출 최적화
+
+            ### 추가
+            - Help 모달에 홈페이지 링크 추가
           files: |
             ytninza-Mac-Intel/ytninza-Mac-Intel-${{ github.ref_name }}.dmg
             ytninza-Mac-MChip/ytninza-Mac-MChip-${{ github.ref_name }}.dmg
