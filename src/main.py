@@ -11,6 +11,7 @@ import time
 import logging
 import traceback
 import urllib.request
+import webbrowser
 from utils.logger import setup_logger
 from utils.config import Config
 from utils.crash_reporter import send_crash_report
@@ -290,10 +291,15 @@ def main():
     # Application URL
     app_url = f"http://{Config.HOST}:{port}"
 
+    class JsApi:
+        def open_url(self, url: str):
+            webbrowser.open(url)
+
     # Create window
     window = webview.create_window(
         title=Config.APP_NAME,
         url=app_url,
+        js_api=JsApi(),
         width=1300,
         height=900,
         resizable=True,

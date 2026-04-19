@@ -287,6 +287,11 @@ async function init() {
         elements.doneToast.style.display = 'none';
     });
 
+    // ── Prevent titlebar-right interactions from triggering pywebview drag ──
+    document.querySelector('.titlebar-right').addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+    });
+
     // ── Zoom ──
     const ZOOM_STEP = 10;
     const ZOOM_MIN = 80;
@@ -294,16 +299,19 @@ async function init() {
     let zoomPct = parseInt(localStorage.getItem('ytninza_zoom') || '100', 10);
     const zoomLevelEl = document.getElementById('zoomLevel');
 
+    const zoomTarget = document.querySelector('main');
     function applyZoom() {
-        document.body.style.zoom = (zoomPct / 100).toString();
+        zoomTarget.style.zoom = (zoomPct / 100).toString();
         zoomLevelEl.textContent = zoomPct + '%';
         localStorage.setItem('ytninza_zoom', zoomPct);
     }
-    document.getElementById('zoomInBtn').addEventListener('click', () => {
+    document.getElementById('zoomInBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
         zoomPct = Math.min(zoomPct + ZOOM_STEP, ZOOM_MAX);
         applyZoom();
     });
-    document.getElementById('zoomOutBtn').addEventListener('click', () => {
+    document.getElementById('zoomOutBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
         zoomPct = Math.max(zoomPct - ZOOM_STEP, ZOOM_MIN);
         applyZoom();
     });

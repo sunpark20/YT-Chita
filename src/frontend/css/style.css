@@ -137,7 +137,7 @@ body {
 .btn-zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .zoom-level {
   font-size: 11px; font-weight: var(--fw-bold); color: var(--ink-muted);
-  min-width: 36px; text-align: center; letter-spacing: 0.02em;
+  width: 36px; text-align: center; letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums; user-select: none;
 }
 
@@ -505,11 +505,11 @@ body {
 }
 .modal-content h4 { color: var(--ink); font-weight: var(--fw-med); margin-bottom: var(--s-2); }
 .modal-close {
-  position: absolute; top: 12px; right: 12px;
+  position: sticky; top: 12px; float: right;
   width: 32px; height: 32px; border-radius: var(--r-full);
   background: var(--surface-2); color: var(--ink-muted); border: none;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  font-size: 0;
+  font-size: 0; z-index: 10;
 }
 .modal-close:hover { background: var(--ink-faint); }
 

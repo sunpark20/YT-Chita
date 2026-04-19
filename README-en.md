@@ -37,7 +37,6 @@ https://github.com/sunpark20/YT-Chita/releases
 ## Limitations
 
 - **Apple Silicon Mac first** — I don't own an Intel Mac or Windows machine, so testing is difficult. Please report issues via comments or email and I'll fix them when I can.
-- **Windows bug** — yt-dlp auto-update doesn't work on Windows yet. You may need to update it manually.
 
 
 ## Format

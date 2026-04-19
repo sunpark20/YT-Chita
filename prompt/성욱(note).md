@@ -1,6 +1,15 @@
 # 기능 변경 노트
 > 요점만 간단히적기
 
+## 로컬 실행 방법
+cd /Users/sunguk/0.code/0.suspend/YT-Chita
+source venv/bin/activate
+python3 src/main.py
+
+- FastAPI 서버가 `127.0.0.1:8000`에 뜨고 pywebview 데스크톱 창이 열림
+- 8000 포트 사용 중이면 8001~8009 자동 탐색
+- ffmpeg 필요 (`brew install ffmpeg`)
+
 ## 프래그먼트 병렬 + 포맷 재시도 + 스킵 사유 표시 (2026-03-13)
 - `concurrent_fragment_downloads: 4` → DASH 프래그먼트 4개 동시 다운로드, 속도 대폭 향상
 - 앱 레벨 재시도: "format not available" 에러 시 3초 대기 후 1회 재시도 (extract_info 재호출)
