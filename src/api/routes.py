@@ -32,6 +32,9 @@ from utils.key_manager import (
 
 logger = logging.getLogger(__name__)
 
+MEMBERSHIP_AVAIL = {'subscriber_only', 'needs_auth', 'premium_only'}
+MEMBERSHIP_KEYWORDS = ['멤버십', '멤버쉽', '회원 전용', 'membership', 'members only', 'members-only']
+
 router = APIRouter(prefix="/api")
 
 # Service instances (will be initialized with API key)
@@ -295,13 +298,10 @@ async def analyze_channel(request: ChannelAnalyzeRequest):
                 message="No videos found in channel"
             )
 
-        # 멤버십 전용 영상 필터링 (availability 필드 + 제목 키워드)
-        membership_avail = {'subscriber_only', 'needs_auth', 'premium_only'}
-        membership_title_kw = ['멤버십', '멤버쉽', '회원 전용', 'membership', 'members only']
         videos = [
             v for v in videos
-            if (v.get('availability') or '') not in membership_avail
-            and not any(kw in (v.get('title') or '').lower() for kw in membership_title_kw)
+            if (v.get('availability') or '') not in MEMBERSHIP_AVAIL
+            and not any(kw in (v.get('title') or '').lower() for kw in MEMBERSHIP_KEYWORDS)
         ]
 
         # Filter Shorts (≤180s) when using API and include_shorts is False
@@ -384,11 +384,9 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
                 # Fetch all playlists
                 playlists = youtube_service.get_channel_playlists(channel_id)
 
-                # 멤버십 전용 재생목록 필터링
-                membership_keywords = ['멤버십', '멤버쉽', 'membership', 'members only', 'members-only']
                 playlists = [
                     pl for pl in playlists
-                    if not any(kw in pl['title'].lower() for kw in membership_keywords)
+                    if not any(kw in pl['title'].lower() for kw in MEMBERSHIP_KEYWORDS)
                 ]
 
                 # 같은 이름 재생목록 → 상위 폴더/하위 번호 폴더 구조
@@ -448,11 +446,9 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
                     
                     entries = list(info.get('entries', []))
 
-                    # 멤버십 전용 재생목록 필터링
-                    membership_keywords = ['멤버십', '멤버쉽', 'membership', 'members only', 'members-only']
                     entries = [
                         e for e in entries
-                        if e and not any(kw in (e.get('title') or '').lower() for kw in membership_keywords)
+                        if e and not any(kw in (e.get('title') or '').lower() for kw in MEMBERSHIP_KEYWORDS)
                     ]
 
                     # 같은 이름 재생목록 → 상위 폴더/하위 번호 폴더 구조
@@ -514,24 +510,21 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
         unique_videos = len(videos_list)
         duplicates_removed = total_videos - unique_videos
 
-        # Check for already downloaded
+        # Check for already downloaded — group by download path to avoid N+1 archive reads
+        safe_chan = channel_name or channel_id or "Unknown Channel"
+        path_groups: dict[str, list] = {}
+        for v in videos_list:
+            safe_pl = v.get('playlist_name') or "Unknown Playlist"
+            dp = str(Config.get_download_path(safe_chan, safe_pl))
+            path_groups.setdefault(dp, []).append(v)
+
         to_download_vids = []
         already_downloaded = 0
-        from utils.config import Config
-        for v in videos_list:
-            safe_chan = channel_name or channel_id or "Unknown Channel"
-            safe_pl = v.get('playlist_name') or "Unknown Playlist"
-            download_path = Config.get_download_path(safe_chan, safe_pl)
-            
-            # Check if file exists (duplicate_filter logic for single file)
-            # Actually DuplicateFilter expects a list of IDs. We can check manually or use filter.
-            # It's easier to use the filter per video.
-            res = duplicate_filter.filter_already_downloaded([v], str(download_path))
-            if res:
-                to_download_vids.append(v)
-            else:
-                already_downloaded += 1
-                
+        for dp, vids in path_groups.items():
+            remaining = duplicate_filter.filter_already_downloaded(vids, dp)
+            to_download_vids.extend(remaining)
+            already_downloaded += len(vids) - len(remaining)
+
         to_download = len(to_download_vids)
 
         video_infos = [

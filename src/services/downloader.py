@@ -57,15 +57,12 @@ class YTBulkDownloader:
             'extract_flat': False,
             'file_access_retries': 5,
             'extractor_args': {'youtube': {'lang': ['en']}},
-            # retry: 실패 시 재시도
             'retries': 3,
             'fragment_retries': 3,
             'extractor_retries': 3,
-            # sleep: 연속 요청 시 YouTube 차단 방지
             'sleep_interval': 1,
             'max_sleep_interval': 3,
             'sleep_interval_requests': 1,
-            # 프래그먼트 병렬 다운로드 (단일 영상 내 DASH 조각을 동시에 받음)
             'concurrent_fragment_downloads': 4,
             'logger': logger,   # yt-dlp 에러/경고를 Python logger로 캡처
         }
@@ -83,6 +80,9 @@ class YTBulkDownloader:
     def reset_cancel(self):
         """취소 플래그 초기화"""
         self._cancel_event.clear()
+        self._progress_map.clear()
+        self._last_total_map.clear()
+        self._downloaded_bytes_map.clear()
 
     @staticmethod
     def _format_bytes(b: int) -> str:
@@ -584,20 +584,3 @@ class YTBulkDownloader:
                 download_info['formats'][quality] = url
 
         return download_info
-
-
-# Example usage
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
-    downloader = YTBulkDownloader()
-
-    # Test with a video ID (replace with actual ID)
-    # test_id = "dQw4w9WgXcQ"
-    # info = downloader.get_download_info(test_id)
-    # if info:
-    #     print(f"Title: {info['title']}")
-    #     print(f"Available formats: {list(info['formats'].keys())}")

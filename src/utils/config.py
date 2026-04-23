@@ -1,8 +1,4 @@
-"""
-Configuration Management
-
-Application settings and configuration
-"""
+"""Application settings and configuration"""
 
 import os
 import sys
