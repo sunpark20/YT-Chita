@@ -15,8 +15,6 @@ google-auth-oauthlib>=1.2.0
 
 # Utilities
 pydantic>=2.6.1
-aiofiles>=23.2.1
-requests>=2.31.0
 
 # Build
 pyinstaller>=6.3.0
