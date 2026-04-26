@@ -368,10 +368,10 @@ def main():
 
     # Step 4: Start the application (blocking call)
     try:
-        webview.start(
-            debug=False,
-            http_server=False,
-        )
+        start_kwargs = dict(debug=False, http_server=False)
+        if sys.platform == 'win32':
+            start_kwargs['gui'] = 'edgechromium'
+        webview.start(**start_kwargs)
     except KeyboardInterrupt:
         logger.info("Application interrupted by user")
     except Exception as e:
@@ -384,10 +384,13 @@ def main():
             _fatal_error(
                 "WebView 초기화 실패 (.NET 런타임 오류)\n\n"
                 "해결 방법:\n"
-                "  1. 앱 폴더를 클라우드 동기화 폴더(OneDrive 등) 밖으로 이동\n"
-                "  2. .NET Desktop Runtime 6.0 이상 설치\n"
-                "     → https://dotnet.microsoft.com/download\n"
-                "  3. 문제가 지속되면 앱을 다시 다운로드\n"
+                "  1. 앱 폴더에서 PowerShell을 열고 아래 명령 실행:\n"
+                "       Get-ChildItem -Recurse | Unblock-File\n"
+                "     (Windows가 다운로드 파일의 DLL을 차단했을 수 있음)\n\n"
+                "  2. 앱 폴더를 클라우드 동기화 폴더(OneDrive 등) 밖으로 이동\n\n"
+                "  3. .NET Desktop Runtime 6.0 이상 설치\n"
+                "     → https://dotnet.microsoft.com/download\n\n"
+                "  4. 문제가 지속되면 앱을 다시 다운로드\n"
                 f"\n상세: {error_msg}"
             )
         else:
