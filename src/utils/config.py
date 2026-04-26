@@ -25,7 +25,7 @@ class Config:
 
     # Application
     APP_NAME = "ytninza"
-    APP_VERSION = "1.4.2"
+    APP_VERSION = "1.4.3"
 
     # Server
     HOST = "127.0.0.1"

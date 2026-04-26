@@ -94,6 +94,58 @@ def _handle_uncaught_exception(exc_type, exc_value, exc_tb):
 sys.excepthook = _handle_uncaught_exception
 
 
+_CLOUD_SYNC_MARKERS = {
+    'onedrive': 'OneDrive',
+    'dropbox': 'Dropbox',
+    'google drive': 'Google Drive',
+    'my drive': 'Google Drive',
+    'icloud': 'iCloud',
+}
+
+
+def _check_cloud_sync_path():
+    """Warn if the packaged app is running from a cloud-synced folder."""
+    if sys.platform != 'win32' or not getattr(sys, 'frozen', False):
+        return
+
+    app_path_lower = str(Path(sys.executable).resolve()).lower()
+
+    detected = None
+    for marker, display_name in _CLOUD_SYNC_MARKERS.items():
+        if marker in app_path_lower:
+            detected = display_name
+            break
+
+    if not detected:
+        return
+
+    logger.warning(f"App running from cloud sync folder ({detected})")
+
+    try:
+        import ctypes
+        MB_YESNO = 0x04
+        MB_ICONWARNING = 0x30
+        IDNO = 7
+        result = ctypes.windll.user32.MessageBoxW(
+            0,
+            (
+                f"앱이 클라우드 동기화 폴더({detected})에서 실행되고 있습니다.\n\n"
+                "클라우드 동기화 폴더에서는 DLL 로딩 오류로 "
+                "앱이 실행되지 않을 수 있습니다.\n\n"
+                "권장: 앱 폴더를 바탕 화면이나 C:\\ytninza 등 "
+                "일반 폴더로 이동한 뒤 다시 실행해 주세요.\n\n"
+                "그래도 계속 실행하시겠습니까?"
+            ),
+            "ytninza",
+            MB_YESNO | MB_ICONWARNING,
+        )
+        if result == IDNO:
+            logger.info("User chose to exit due to cloud sync folder warning.")
+            sys.exit(0)
+    except Exception:
+        pass
+
+
 def _check_environment():
     """
     Validate runtime environment and log diagnostics.
@@ -220,6 +272,7 @@ def main():
 
     # Step 0: Validate environment (PyObjC, ffmpeg, arch)
     _check_environment()
+    _check_cloud_sync_path()
 
     # Step 1: Update yt-dlp on startup
     logger.info("Checking yt-dlp updates...")
@@ -325,7 +378,20 @@ def main():
         error_msg = str(e)
         logger.error(f"Application error: {error_msg}")
         send_crash_report(type(e), e, e.__traceback__)
-        _fatal_error(f"Application error: {error_msg}")
+
+        err_lower = error_msg.lower()
+        if any(kw in err_lower for kw in ('python.runtime', 'pythonnet', 'clr_loader', 'failed to resolve')):
+            _fatal_error(
+                "WebView 초기화 실패 (.NET 런타임 오류)\n\n"
+                "해결 방법:\n"
+                "  1. 앱 폴더를 클라우드 동기화 폴더(OneDrive 등) 밖으로 이동\n"
+                "  2. .NET Desktop Runtime 6.0 이상 설치\n"
+                "     → https://dotnet.microsoft.com/download\n"
+                "  3. 문제가 지속되면 앱을 다시 다운로드\n"
+                f"\n상세: {error_msg}"
+            )
+        else:
+            _fatal_error(f"Application error: {error_msg}")
     finally:
         logger.info("Application shut down")
         import os
