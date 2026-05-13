@@ -20,6 +20,8 @@
 
 https://github.com/sunpark20/YT-Chita/releases
 
+개발자의 다른 앱: https://homeninja.vercel.app/
+
 
 ## 오류 신고
 
@@ -31,7 +33,7 @@ https://github.com/sunpark20/YT-Chita/releases
 - **증상 설명** — 구체적으로 어떤 상황인지 (예: 프로그램을 눌렀는데 안 뜸 / 떴다가 바로 사라짐 / 특정 오류 메시지 등)
 - **PC 사양** — OS 버전, CPU, RAM 등 기본 스펙 스크린샷
 
-신고 이메일: **sun.park20@gmail.com**
+신고 이메일: **coastguard2681@gmail.com**
 
 ## 한계
 

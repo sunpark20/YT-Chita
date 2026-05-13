@@ -17,6 +17,10 @@ So downloads are saved as `260311_VideoTitle` to keep them sorted by upload date
 
 https://github.com/sunpark20/YT-Chita/releases
 
+Developer's other apps: https://homeninja.vercel.app/
+
+Support email: **coastguard2681@gmail.com**
+
 | Platform | File |
 |----------|------|
 | Mac (Apple Silicon) | `YB-Mac-M-Chip.dmg` |

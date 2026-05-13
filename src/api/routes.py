@@ -44,6 +44,14 @@ duplicate_filter = DuplicateFilter()
 updater = YtdlpUpdater()
 
 
+def _safe_channel_folder(name: str = None) -> str:
+    return Config.sanitize_path_component(name or "Unknown Channel", "Unknown Channel")
+
+
+def _safe_playlist_folder(name: str = None) -> str:
+    return str(Config.sanitize_path_fragment(name or "Unknown Playlist", "Unknown Playlist"))
+
+
 def initialize_services(api_key: str = None):
     """Initialize services with API key"""
     global youtube_service
@@ -316,7 +324,7 @@ async def analyze_channel(request: ChannelAnalyzeRequest):
         duplicates_removed = total_videos - unique_videos
 
         # Check for already downloaded
-        safe_channel_name = channel_name or channel_id or "Unknown Channel"
+        safe_channel_name = _safe_channel_folder(channel_name or channel_id)
         download_path = Config.get_download_path(safe_channel_name)
         videos = duplicate_filter.filter_already_downloaded(videos, str(download_path))
         to_download = len(videos)
@@ -339,7 +347,7 @@ async def analyze_channel(request: ChannelAnalyzeRequest):
         return ChannelAnalyzeResponse(
             success=True,
             channel_id=channel_id,
-            channel_name=channel_name or None,
+            channel_name=safe_channel_name,
             total_videos=total_videos,
             unique_videos=unique_videos,
             duplicates_removed=duplicates_removed,
@@ -511,10 +519,11 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
         duplicates_removed = total_videos - unique_videos
 
         # Check for already downloaded — group by download path to avoid N+1 archive reads
-        safe_chan = channel_name or channel_id or "Unknown Channel"
+        safe_chan = _safe_channel_folder(channel_name or channel_id)
         path_groups: dict[str, list] = {}
         for v in videos_list:
-            safe_pl = v.get('playlist_name') or "Unknown Playlist"
+            safe_pl = _safe_playlist_folder(v.get('playlist_name'))
+            v['playlist_name'] = safe_pl
             dp = str(Config.get_download_path(safe_chan, safe_pl))
             path_groups.setdefault(dp, []).append(v)
 
@@ -541,7 +550,7 @@ async def analyze_channel_playlists(request: ChannelAnalyzeRequest):
         return ChannelAnalyzeResponse(
             success=True,
             channel_id=channel_id,
-            channel_name=channel_name or None,
+            channel_name=safe_chan,
             total_videos=total_videos,
             unique_videos=unique_videos,
             duplicates_removed=duplicates_removed,
@@ -575,7 +584,7 @@ async def analyze_video(request: PlaylistAnalyzeRequest):
         if not info:
             raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다.")
 
-        channel_name = info.get('uploader', '') or 'Unknown Channel'
+        channel_name = _safe_channel_folder(info.get('uploader', '') or 'Unknown Channel')
 
         # 이미 다운로드 여부 확인 (채널 루트 폴더)
         download_path = Config.get_download_path(channel_name)
@@ -654,8 +663,8 @@ async def analyze_playlist(request: PlaylistAnalyzeRequest):
         duplicates_removed = total_videos - unique_videos
 
         # Check for already downloaded
-        safe_channel_name = channel_name or "Unknown Channel"
-        safe_playlist_name = playlist_name or playlist_id or "Unknown Playlist"
+        safe_channel_name = _safe_channel_folder(channel_name)
+        safe_playlist_name = _safe_playlist_folder(playlist_name or playlist_id)
         download_path = Config.get_download_path(safe_channel_name, safe_playlist_name)
         videos = duplicate_filter.filter_already_downloaded(videos, str(download_path))
         to_download = len(videos)
@@ -674,8 +683,8 @@ async def analyze_playlist(request: PlaylistAnalyzeRequest):
         return PlaylistAnalyzeResponse(
             success=True,
             playlist_id=playlist_id,
-            playlist_name=playlist_name or None,
-            channel_name=channel_name or None,
+            playlist_name=safe_playlist_name,
+            channel_name=safe_channel_name,
             total_videos=total_videos,
             unique_videos=unique_videos,
             duplicates_removed=duplicates_removed,

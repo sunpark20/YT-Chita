@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ytninza</title>
+    <link rel="icon" type="image/png" href="/static/images/app-icon.png">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 
@@ -14,7 +15,7 @@
         <header class="titlebar pywebview-drag-region">
             <div class="titlebar-left">
                 <div class="logo-mark">
-                    <svg width="28" height="28" viewBox="0 0 64 64"><path d="M20 20 L32 32 L20 44" fill="none" stroke="#C37C54" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M36 44 L44 44" stroke="#F0EEE9" stroke-width="5" stroke-linecap="round"/></svg>
+                    <img src="/static/images/app-icon.png" alt="" class="logo-img">
                 </div>
                 <span class="titlebar-label">ytninza</span>
             </div>
@@ -64,7 +65,12 @@
             <p id="downloadDirMessage" class="settings-message"></p>
 
             <div class="divider"></div>
-            <p style="font-size:11px;color:var(--ink-faint);margin:0 0 6px">Send logs to the developer if something goes wrong.</p>
+            <p class="settings-note">Send logs to the developer if something goes wrong.</p>
+            <a class="settings-link" href="#" onclick="if(window.pywebview){pywebview.api.open_url('https://homeninja.vercel.app/')}else{window.open('https://homeninja.vercel.app/','_blank')};return false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                Developer's other apps
+            </a>
+            <p class="settings-contact">coastguard2681@gmail.com</p>
             <button id="openLogFolderBtn" class="settings-link">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
                 Open log folder

@@ -1,6 +1,7 @@
 """Application settings and configuration"""
 
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -25,7 +26,7 @@ class Config:
 
     # Application
     APP_NAME = "ytninza"
-    APP_VERSION = "1.4.4"
+    APP_VERSION = "1.4.5"
 
     # Server
     HOST = "127.0.0.1"
@@ -47,10 +48,52 @@ class Config:
     # Performance
     CHUNK_SIZE = 8192  # For file operations
 
+    _INVALID_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+    _RESERVED_WINDOWS_NAMES = {
+        "CON", "PRN", "AUX", "NUL",
+        *(f"COM{i}" for i in range(1, 10)),
+        *(f"LPT{i}" for i in range(1, 10)),
+    }
+
     @classmethod
     def ensure_directories(cls):
         """Create necessary directories if they don't exist"""
         cls.DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def sanitize_path_component(cls, value: str, fallback: str) -> str:
+        """Return a filesystem-safe single path component.
+
+        Windows silently normalizes some trailing spaces/dots, which can make
+        parent folders appear to exist while nested paths fail with WinError 3.
+        Keep this normalization centralized so analysis and download use the
+        same folder names.
+        """
+        name = str(value or "")
+        name = cls._INVALID_PATH_CHARS.sub("_", name)
+        name = re.sub(r"\s+", " ", name).strip(" .")
+
+        if not name:
+            name = fallback
+
+        stem = name.split(".", 1)[0].upper()
+        if stem in cls._RESERVED_WINDOWS_NAMES:
+            name = f"_{name}"
+
+        return name
+
+    @classmethod
+    def sanitize_path_fragment(cls, value: str, fallback: str) -> Path:
+        """Return a safe relative path, sanitizing each component."""
+        raw = str(value or "")
+        parts = [
+            cls.sanitize_path_component(part, fallback)
+            for part in re.split(r"[\\/]+", raw)
+            if part.strip(" .")
+        ]
+        if not parts:
+            parts = [fallback]
+        return Path(*parts)
 
     @classmethod
     def get_download_path(cls, channel_name: str = "", playlist_name: str = "") -> Path:
@@ -66,10 +109,13 @@ class Config:
         """
         if channel_name and playlist_name:
             # Channel / Playlist structure
-            path = cls.DOWNLOADS_DIR / channel_name / playlist_name
+            safe_channel = cls.sanitize_path_component(channel_name, "Unknown Channel")
+            safe_playlist = cls.sanitize_path_fragment(playlist_name, "Unknown Playlist")
+            path = cls.DOWNLOADS_DIR / safe_channel / safe_playlist
         elif channel_name:
             # Channel / All Videos
-            path = cls.DOWNLOADS_DIR / channel_name / "All Videos"
+            safe_channel = cls.sanitize_path_component(channel_name, "Unknown Channel")
+            path = cls.DOWNLOADS_DIR / safe_channel / "All Videos"
         else:
             # Root downloads folder
             path = cls.DOWNLOADS_DIR
